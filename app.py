@@ -286,17 +286,42 @@ def crea_grafo_link_interni_streamlit(
 # --- Applicazione Streamlit ---
 st.set_page_config(layout="wide", page_title="Visualizzatore Grafo Link Interni")
 
-st.title("Visualizzatore Interattivo Grafo Link Interni")
+st.title("🌐 Visualizzatore Interattivo Grafo Link Interni 🔗")
+
 st.markdown("""
-Carica un file CSV con i link interni (colonne richieste: `Source`, `Destination`; opzionali: `Anchor`, `Type`) 
-e personalizza i filtri per visualizzare la struttura del grafo.
+Benvenuto! Questa applicazione ti aiuta a esplorare la struttura dei link interni del tuo sito web. 
+Visualizza le connessioni tra le pagine come un grafo interattivo, permettendoti di identificare 
+pattern, pagine isolate, e molto altro.
+
+**Come funziona?** 🗺️
+
+1.  **⬆️ Carica il tuo File**: Utilizza la sidebar per caricare un file CSV contenente i dati dei link.
+    * **Colonne Richieste**: `Source` (URL di origine), `Destination` (URL di destinazione).
+    * **Colonne Opzionali**: 
+        * `Anchor` (il testo dell'anchor text del link).
+        * `Type` (il tipo di link, es. "Hyperlink", "HTTP Redirect").
+2.  **⚙️ Personalizza i Filtri**: Nella sidebar, puoi:
+    * Definire un **dominio specifico** da includere (per concentrarti sui link interni).
+    * Filtrare per **tipo di record** (es. visualizzare solo "Hyperlink").
+    * **Escludere URL** che contengono stringhe specifiche (es. `.css`, `.jpg`) tramite checkbox o inserendo valori personalizzati.
+3.  **🎨 Evidenziazione Personalizzata**:
+    * Colora i **nodi** (pagine) la cui URL contiene una stringa a tua scelta.
+    * Colora gli **archi** (link) il cui anchor text contiene una stringa a tua scelta.
+4.  **🔎 Esplora il Grafo**: Il grafo verrà visualizzato nell'area principale.
+    * Interagisci zoomando, spostandoti e ruotando (se in 3D).
+    * Passa il mouse sopra nodi e archi per visualizzare dettagli.
+5.  **📊 Analizza i Log**: Un log di pre-processing ti mostrerà come i filtri influenzano i dati.
+6.  **💾 Scarica il Report**: Puoi scaricare un riepilogo dei nodi del grafo generato.
+
+Inizia caricando il tuo file e sperimentando con i filtri!
 """)
+
 
 log_placeholder_container = st.empty() # Contenitore per l'expander dei log
 
 with st.sidebar: 
-    st.header("Opzioni di Filtro e Controllo")
-    uploaded_file = st.file_uploader("Carica il tuo file CSV dei link", type=["csv"])
+    st.header("🛠️ Opzioni di Filtro e Controllo") # Aggiunto emoji
+    uploaded_file = st.file_uploader("📤 Carica il tuo file CSV dei link", type=["csv"]) # Aggiunto emoji
 
     default_stringhe_da_escludere = [     
         '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', 
@@ -310,18 +335,18 @@ with st.sidebar:
         '/autodiscover/autodiscover.xml'
     ]
 
-    dominio_input = st.text_input("Dominio da Includere (es. 'sitoesempio.com')", value="sitoesempio.com") 
+    dominio_input = st.text_input("🔗 Dominio da Includere (es. 'sitoesempio.com')", value="sitoesempio.com") # Aggiunto emoji
 
     tipo_record_opzioni = ["Nessuno", "Hyperlink", "HTTP Redirect", "HTML Canonical", "Image"] 
     tipo_record_selezionato = st.selectbox(
-        "Valore Tipo Record da Includere (opzionale, colonna 'Type')", 
+        "🏷️ Valore Tipo Record da Includere (opzionale, colonna 'Type')",  # Aggiunto emoji
         options=tipo_record_opzioni, 
         index=1 
     )
     valore_tipo_da_usare = None if tipo_record_selezionato == "Nessuno" else tipo_record_selezionato
 
     st.markdown("---")
-    st.subheader("Filtri URL da Escludere (seleziona per escludere):")
+    st.subheader("🚫 Filtri URL da Escludere (seleziona per escludere):") # Aggiunto emoji
     
     if 'checkbox_states' not in st.session_state:
         st.session_state.checkbox_states = {s_escl: True for s_escl in default_stringhe_da_escludere}
@@ -341,7 +366,7 @@ with st.sidebar:
         if is_checked: 
             stringhe_escluse_selezionate_ui.append(s_escl)
     
-    custom_exclusions_input = st.text_input("Altri filtri URL da escludere (separati da virgola):", key="custom_exclusions_text")
+    custom_exclusions_input = st.text_input("➕ Altri filtri URL da escludere (separati da virgola):", key="custom_exclusions_text") # Aggiunto emoji
     if custom_exclusions_input:
         custom_exclusions_list = [item.strip() for item in custom_exclusions_input.split(',') if item.strip()]
         stringhe_escluse_selezionate_ui.extend(custom_exclusions_list) 
@@ -350,7 +375,7 @@ with st.sidebar:
     st.caption(f"Stringhe URL totali per l'esclusione: {stringhe_escluse_selezionate_ui if stringhe_escluse_selezionate_ui else 'Nessuna'}")
     
     st.markdown("---")
-    st.subheader("Evidenziazione URL Nodi")
+    st.subheader("🎨 Evidenziazione URL Nodi") # Aggiunto emoji
     abilita_evidenziazione_stringa_url_ui = st.checkbox("Abilita evidenziazione URL per stringa", key="enable_highlight_url_str")
     stringa_da_cercare_url_ui = ""
     colore_scelto_url_ui = "#00FF00" 
@@ -359,7 +384,7 @@ with st.sidebar:
         colore_scelto_url_ui = st.color_picker("Colore di evidenziazione per URL nodo:", value="#00FF00", key="highlight_url_color")
 
     st.markdown("---")
-    st.subheader("Evidenziazione Anchor Text Archi")
+    st.subheader("🌈 Evidenziazione Anchor Text Archi") # Aggiunto emoji
     abilita_evidenziazione_anchor_ui = st.checkbox("Abilita evidenziazione anchor text per archi", key="enable_highlight_anchor_str")
     stringa_da_cercare_anchor_ui = ""
     colore_scelto_anchor_ui = "#800080" 
@@ -369,15 +394,15 @@ with st.sidebar:
 
 
     st.markdown("---")
-    st.info("Modifica i filtri e il grafico si aggiornerà automaticamente al caricamento di un nuovo file o al cambio di un'opzione (se il file è già caricato).")
+    st.info("ℹ️ Modifica i filtri e il grafico si aggiornerà automaticamente al caricamento di un nuovo file o al cambio di un'opzione (se il file è già caricato).") # Aggiunto emoji
 
 
 if uploaded_file is not None:
     try:
         df_caricato = pd.read_csv(uploaded_file, dtype=str)
-        st.success(f"File '{uploaded_file.name}' caricato con successo. ({len(df_caricato)} righe)")
+        st.success(f"✔️ File '{uploaded_file.name}' caricato con successo. ({len(df_caricato)} righe)") # Aggiunto emoji
 
-        with st.spinner("Generazione del grafo in corso... Questo potrebbe richiedere alcuni istanti."):
+        with st.spinner("⏳ Generazione del grafo in corso... Questo potrebbe richiedere alcuni istanti."): # Aggiunto emoji
             figura_plotly, log_output = crea_grafo_link_interni_streamlit(
                 df_input=df_caricato,
                 stringhe_url_da_escludere_selezionate=stringhe_escluse_selezionate_ui, 
@@ -394,37 +419,33 @@ if uploaded_file is not None:
                 colore_evidenziazione_anchor_arco=colore_scelto_anchor_ui         
             )
         
-        # Mostra i log usando l'expander all'interno del placeholder
-        with log_placeholder_container.expander("Log di Pre-processing", expanded=False):
+        with log_placeholder_container.expander("📜 Log di Pre-processing", expanded=False): # Aggiunto emoji
             st.text("\n".join(log_output))
 
         if figura_plotly:
             st.plotly_chart(figura_plotly, use_container_width=True, height=800)
-            st.caption("Interagisci con il grafo: zoom, pan, rotazione (3D), hover per dettagli.")
+            st.caption("🖱️ Interagisci con il grafo: zoom, pan, rotazione (3D), hover per dettagli.") # Aggiunto emoji
             try:
                 with open("report_nodi_grafo_streamlit.csv", "rb") as fp:
                     st.download_button(
-                        label="Scarica Report Nodi (CSV)",
+                        label="📥 Scarica Report Nodi (CSV)", # Aggiunto emoji
                         data=fp,
                         file_name="report_nodi_grafo.csv", 
                         mime="text/csv"
                     )
             except FileNotFoundError:
-                st.warning("File report nodi ('report_nodi_grafo_streamlit.csv') non trovato. Potrebbe non essere stato ancora generato o c'è stato un errore.")
+                st.warning("⚠️ File report nodi ('report_nodi_grafo_streamlit.csv') non trovato. Potrebbe non essere stato ancora generato o c'è stato un errore.") # Aggiunto emoji
             except Exception as e_dl:
-                 st.warning(f"Errore nel preparare il download del report nodi: {e_dl}")
+                 st.warning(f"😥 Errore nel preparare il download del report nodi: {e_dl}") # Aggiunto emoji
         else:
-            # Se figura_plotly è None, significa che la funzione ha restituito un errore gestito
-            # e i messaggi di log dovrebbero già contenere l'avviso.
-            # Potremmo aggiungere un messaggio qui se log_output è vuoto per qualche motivo.
-            if not log_output: # Se per caso i log sono vuoti ma la figura è None
-                 st.warning("Impossibile generare il grafico con i filtri correnti o a causa di un errore non specificato nei log.")
+            if not log_output: 
+                 st.warning("🚫 Impossibile generare il grafico con i filtri correnti o a causa di un errore non specificato nei log.") # Aggiunto emoji
 
 
     except Exception as e:
-        st.error(f"Errore critico durante l'elaborazione del file o la generazione del grafo: {e}")
+        st.error(f"🆘 Errore critico durante l'elaborazione del file o la generazione del grafo: {e}") # Aggiunto emoji
         st.exception(e) 
 else:
-    with log_placeholder_container.container(): # Usa .container() per il messaggio iniziale
-        st.info("Attendo il caricamento di un file CSV per visualizzare il grafo e i log.")
+    with log_placeholder_container.container(): 
+        st.info("⏳ Attendo il caricamento di un file CSV per visualizzare il grafo e i log.") # Aggiunto emoji
 
