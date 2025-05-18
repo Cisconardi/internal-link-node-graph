@@ -34,7 +34,7 @@ def crea_grafo_link_interni_streamlit(
     for col in cols_base_req:
         if col not in df.columns:
             msg = f"Errore: Colonna base '{col}' mancante nel file CSV."
-            st.error(msg)
+            # st.error(msg) # st.error non può essere chiamato qui, la funzione deve restituire
             return None, [msg]
             
     if col_anchor and col_anchor not in df.columns:
@@ -51,7 +51,7 @@ def crea_grafo_link_interni_streamlit(
 
     df[col_source] = df[col_source].astype(str).str.strip()
     df[col_dest] = df[col_dest].astype(str).str.strip()
-    if col_anchor and col_anchor in df.columns: # Controlla di nuovo se col_anchor è valido
+    if col_anchor and col_anchor in df.columns: 
         df[col_anchor] = df[col_anchor].astype(str).str.strip().replace('', np.nan)
 
     # Filtro per tipo di record
@@ -62,14 +62,13 @@ def crea_grafo_link_interni_streamlit(
             df[colonna_tipo_record] = df[colonna_tipo_record].astype(str).str.strip()
             df = df[df[colonna_tipo_record].str.lower() == valore_tipo_da_includere.lower()]
             log_messages.append(f"  Righe dopo filtro tipo record: {len(df)} ({righe_prima_filtro_tipo - len(df)} rimosse da questo filtro)")
-    righe_correnti = len(df)
+    # righe_correnti = len(df) # Non necessario aggiornare qui, lo facciamo dopo dropna
 
-    # Rimuovi NaN e stringhe vuote in Source/Destination DOPO il filtro tipo, che potrebbe introdurre NaN se la colonna non c'è per tutte le righe
     righe_prima_dropna = len(df)
     df.dropna(subset=[col_source, col_dest], inplace=True)
     df = df[(df[col_source].str.len() > 0) & (df[col_dest].str.len() > 0)]
     log_messages.append(f"Righe dopo rimozione NA/vuoti in Source/Destination: {len(df)} ({righe_prima_dropna - len(df)} rimosse)")
-    righe_correnti = len(df)
+    # righe_correnti = len(df) # Non necessario aggiornare qui
 
     str_exclude_lower = [s.lower() for s in stringhe_url_da_escludere_selezionate if s] if stringhe_url_da_escludere_selezionate else []
     dom_include_lower = dominio_da_includere.lower() if dominio_da_includere else None
@@ -81,16 +80,16 @@ def crea_grafo_link_interni_streamlit(
         for s_ex in str_exclude_lower:
             m_src &= ~df[col_source].str.lower().str.contains(s_ex, na=False, regex=False)
             m_dst &= ~df[col_dest].str.lower().str.contains(s_ex, na=False, regex=False)
-        df = df[m_src & m_dst] # Mantiene solo se NON contiene in Source E NON contiene in Dest
+        df = df[m_src & m_dst] 
         log_messages.append(f"  Righe dopo filtro esclusione URL: {len(df)} ({righe_prima_filtro_url - len(df)} rimosse)")
-    righe_correnti = len(df)
+    # righe_correnti = len(df) # Non necessario
 
     if dom_include_lower:
         righe_prima_filtro_dom = len(df)
         log_messages.append(f"Filtro inclusione dominio (Dest): '{dom_include_lower}'")
         df = df[df[col_dest].str.lower().str.contains(dom_include_lower, na=False, regex=False)]
         log_messages.append(f"  Righe dopo filtro inclusione dominio: {len(df)} ({righe_prima_filtro_dom - len(df)} rimosse)")
-    righe_correnti = len(df)
+    # righe_correnti = len(df) # Non necessario
         
     righe_prima_filtro_auto = len(df)
     df = df[df[col_source] != df[col_dest]]
@@ -98,7 +97,7 @@ def crea_grafo_link_interni_streamlit(
     
     if df.empty: 
         log_messages.append("DataFrame vuoto post-filtri. Nessun grafo da generare."); 
-        st.warning("Nessun dato da visualizzare dopo i filtri.")
+        # st.warning non può essere chiamato qui
         return None, log_messages
         
     log_messages.append("Aggregazione anchor text...")
@@ -112,7 +111,6 @@ def crea_grafo_link_interni_streamlit(
 
     if df_agg.empty: 
         log_messages.append("DataFrame aggregato vuoto. Nessun grafo da generare."); 
-        st.warning("Nessun dato aggregato da visualizzare.")
         return None, log_messages
     log_messages.append(f"Archi unici per grafo: {len(df_agg)}")
 
@@ -123,12 +121,9 @@ def crea_grafo_link_interni_streamlit(
     log_messages.append(f"Nodi nel grafo: {G.number_of_nodes()}, Archi nel grafo: {G.number_of_edges()}")
     if G.number_of_nodes() == 0: 
         log_messages.append("Grafo vuoto."); 
-        st.warning("Il grafo risultante è vuoto.")
         return None, log_messages
 
     try:
-        # Salva il CSV con un nome univoco per la sessione o timestamp se necessario
-        # Per ora, sovrascrive.
         pd.DataFrame(
             [{'Nodo_URL': n, 'OutDegree': G.out_degree(n), 'InDegree': G.in_degree(n)} for n in G.nodes()]
         ).to_csv(nome_file_export_csv, index=False, encoding='utf-8-sig')
@@ -159,12 +154,10 @@ def crea_grafo_link_interni_streamlit(
                 layout_3d = False; log_messages.append("Layout 2D (kamada_kawai) calcolato.")
             except Exception as e_2d_k: 
                 log_messages.append(f"Errore tutti i layout ({e_2d_k}). Visualizzazione annullata."); 
-                st.error("Errore nel calcolo del layout del grafo.")
                 return None, log_messages
     
     if pos is None: 
         log_messages.append("Layout non calcolato. Visualizzazione annullata."); 
-        st.error("Impossibile calcolare il layout del grafo.")
         return None, log_messages
 
     log_messages.append("Preparazione visualizzazione Plotly...")
@@ -223,9 +216,37 @@ def crea_grafo_link_interni_streamlit(
             if layout_3d: node_traces_list.append(go.Scatter3d(x=cat_x, y=cat_y, z=cat_z, **scatter_args))
             else: node_traces_list.append(go.Scatter(x=cat_x, y=cat_y, **scatter_args))
             
-    layout_args = dict(title_x=0.5, titlefont_size=18, showlegend=True, legend_title_text='Categorie Nodi per Grado', hovermode='closest', margin=dict(b=40,l=5,r=5,t=60)) 
-    if layout_3d: fig_layout = go.Layout(title='<b>Grafo Link Interni (3D) con Anchor Text</b>', scene=dict(bgcolor="rgba(240,240,240,0.95)"), **layout_args)
-    else: fig_layout = go.Layout(title='<b>Grafo Link Interni (2D) con Anchor Text</b>', plot_bgcolor='rgba(245,245,245,1)', **layout_args)
+    # Modifica per il titolo del layout
+    common_layout_properties = dict(
+        showlegend=True, 
+        legend_title_text='Categorie Nodi per Grado', 
+        hovermode='closest', 
+        margin=dict(b=40,l=5,r=5,t=60)
+    ) 
+
+    title_font_properties = dict(size=18)
+    title_alignment_properties = dict(x=0.5)
+
+    if layout_3d: 
+        fig_layout = go.Layout(
+            title=dict(
+                text='<b>Grafo Link Interni (3D) con Anchor Text</b>', 
+                font=title_font_properties,
+                **title_alignment_properties
+            ),
+            scene=dict(bgcolor="rgba(240,240,240,0.95)"), 
+            **common_layout_properties
+        )
+    else: 
+        fig_layout = go.Layout(
+            title=dict(
+                text='<b>Grafo Link Interni (2D) con Anchor Text</b>',
+                font=title_font_properties,
+                **title_alignment_properties
+            ), 
+            plot_bgcolor='rgba(245,245,245,1)', 
+            **common_layout_properties
+        )
     
     figura = go.Figure(data=[trace_edges] + node_traces_list, layout=fig_layout)
     log_messages.append("Visualizzazione grafico completata.")
@@ -241,18 +262,10 @@ Carica un file CSV con i link interni (colonne richieste: `Source`, `Destination
 e personalizza i filtri per visualizzare la struttura del grafo.
 """)
 
-# Placeholder per i log, verrà aggiornato dopo la generazione del grafo
 log_placeholder = st.empty()
 
-# --- Sidebar per i Controlli ---
-# Spostata a destra come richiesto dall'utente (Streamlit di default la mette a sinistra)
-# Per metterla a destra, si userebbe st.columns e si metterebbe la sidebar in una colonna.
-# Tuttavia, la sidebar standard di Streamlit è a sinistra.
-# Per ora, userò la sidebar standard a sinistra. Se si vuole a destra, è un cambio di layout più grande.
-
-with st.sidebar: # Usa st.sidebar per la sidebar standard
+with st.sidebar: 
     st.header("Opzioni di Filtro e Controllo")
-
     uploaded_file = st.file_uploader("Carica il tuo file CSV dei link", type=["csv"])
 
     default_stringhe_da_escludere = [     
@@ -280,18 +293,14 @@ with st.sidebar: # Usa st.sidebar per la sidebar standard
     st.markdown("---")
     st.subheader("Filtri URL da Escludere (seleziona per escludere):")
     
-    # Inizializza lo stato delle checkbox se non esiste
     if 'checkbox_states' not in st.session_state:
         st.session_state.checkbox_states = {s: True for s in default_stringhe_da_escludere}
 
     stringhe_escluse_selezionate_ui = []
     for s_escl in default_stringhe_da_escludere:
-        # Crea una chiave univoca per ogni checkbox
-        checkbox_key = f"cb_{s_escl.replace('.', '_').replace('/', '_')}" # Rendi la chiave più robusta
-        
-        # Se la chiave non è in session_state (es. se default_stringhe_da_escludere cambia), inizializzala
+        checkbox_key = f"cb_{s_escl.replace('.', '_').replace('/', '_').replace(':', '_').replace('#','_')}"
         if checkbox_key not in st.session_state.checkbox_states:
-            st.session_state.checkbox_states[checkbox_key] = True # Default a selezionato
+            st.session_state.checkbox_states[checkbox_key] = True 
 
         is_checked = st.checkbox(
             s_escl, 
@@ -307,13 +316,6 @@ with st.sidebar: # Usa st.sidebar per la sidebar standard
     st.info("Modifica i filtri e il grafico si aggiornerà automaticamente al caricamento di un nuovo file o al cambio di un'opzione (se il file è già caricato).")
 
 
-# --- Area Principale per il Grafico ---
-# Creare due colonne: una più piccola per la sidebar (se si vuole a destra) e una più grande per il grafico.
-# Per ora, il grafico occupa l'area principale.
-# col_grafico, col_sidebar_finta = st.columns([3, 1]) # Esempio se si volesse la sidebar a destra
-
-# with col_grafico: # Metti il grafico qui
-
 if uploaded_file is not None:
     try:
         df_caricato = pd.read_csv(uploaded_file, dtype=str)
@@ -322,7 +324,7 @@ if uploaded_file is not None:
         with st.spinner("Generazione del grafo in corso..."):
             figura_plotly, log_output = crea_grafo_link_interni_streamlit(
                 df_input=df_caricato,
-                stringhe_url_da_escludere_selezionate=stringhe_escluse_selezionate_ui, # Usa la lista dalla UI
+                stringhe_url_da_escludere_selezionate=stringhe_escluse_selezionate_ui,
                 dominio_da_includere=dominio_input if dominio_input else None,
                 nome_file_export_csv="report_nodi_grafo_streamlit.csv",
                 colonna_anchor_text="Anchor", 
@@ -330,13 +332,11 @@ if uploaded_file is not None:
                 valore_tipo_da_includere=valore_tipo_da_usare
             )
         
-        # Mostra i log
         log_placeholder.text_area("Log di Pre-processing", "\n".join(log_output), height=250)
 
         if figura_plotly:
             st.plotly_chart(figura_plotly, use_container_width=True, height=800)
             st.caption("Interagisci con il grafo: zoom, pan, rotazione (3D), hover per dettagli.")
-            # Fornire un link per il download del CSV dei nodi
             try:
                 with open("report_nodi_grafo_streamlit.csv", "rb") as fp:
                     st.download_button(
@@ -348,7 +348,9 @@ if uploaded_file is not None:
             except FileNotFoundError:
                 st.warning("File report nodi non ancora generato o errore nella creazione.")
         else:
-            st.warning("Impossibile generare il grafico con i filtri correnti o a causa di un errore.")
+            # Questo warning viene già mostrato all'interno della funzione se ritorna None
+            # st.warning("Impossibile generare il grafico con i filtri correnti o a causa di un errore.")
+            pass
 
     except Exception as e:
         st.error(f"Errore critico durante l'elaborazione del file o la generazione del grafo: {e}")
