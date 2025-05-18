@@ -280,9 +280,9 @@ with st.sidebar:
         '/autodiscover/autodiscover.xml'
     ]
 
-    dominio_input = st.text_input("Dominio da Includere (es. 'sitoesempio.com')", value="sushisenpai")
+    dominio_input = st.text_input("Dominio da Includere (es. 'sitoesempio.com, www.sitoesempio.com, https://sitoesempio.com, sitoesempio.com/folder/')", value="sitoesempio.com")
 
-    tipo_record_opzioni = ["Nessuno", "Hyperlink", "HTTP Redirect"] 
+    tipo_record_opzioni = ["Nessuno", "Hyperlink", "HTTP Redirect", "HTML Canonical", "HTML Canonical", "Image"] 
     tipo_record_selezionato = st.selectbox(
         "Valore Tipo Record da Includere (opzionale, colonna 'Type')", 
         options=tipo_record_opzioni, 
