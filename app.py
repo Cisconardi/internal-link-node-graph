@@ -331,8 +331,6 @@ with st.sidebar:
         '.mp3', '.wav', '.ogg', '.mp4', '.mov', '.avi', '.wmv', 
         '.xml', '.json', '.txt', 
         'mailto:', 'tel:', '#', 'javascript:void(0)'
-        # Rimosso 'googleads.g.doubleclick.net', 'facebook.com', '/autodiscover/autodiscover.xml' 
-        # dalla lista di default per le checkbox, possono essere aggiunti nel campo testo libero.
     ]
 
     dominio_input = st.text_input("🔗 Dominio da Includere (es. 'sitoesempio.com')", value="sitoesempio.com") 
@@ -353,7 +351,6 @@ with st.sidebar:
 
     stringhe_escluse_selezionate_ui = []
     
-    # Layout a 3 colonne per le checkbox
     num_columns = 3
     cols = st.columns(num_columns)
     
@@ -361,16 +358,19 @@ with st.sidebar:
         checkbox_key = f"cb_{s_escl.replace('.', '_dot_').replace('/', '_slash_').replace(':', '_colon_').replace('#','_hash_')}"
         if checkbox_key not in st.session_state.checkbox_states:
             st.session_state.checkbox_states[checkbox_key] = True 
+        
+        # Modifica per l'escape del carattere '#' nel label
+        display_label_cb = r"\#" if s_escl == "#" else s_escl
 
-        with cols[idx % num_columns]: # Distribuisci nelle colonne
+        with cols[idx % num_columns]: 
             is_checked = st.checkbox(
-                s_escl, 
+                display_label_cb, # Usa il label con escape
                 value=st.session_state.checkbox_states[checkbox_key], 
                 key=checkbox_key 
             )
         st.session_state.checkbox_states[checkbox_key] = is_checked 
         if is_checked: 
-            stringhe_escluse_selezionate_ui.append(s_escl)
+            stringhe_escluse_selezionate_ui.append(s_escl) # Aggiungi il valore originale (es. '#')
     
     custom_exclusions_input = st.text_input("➕ Altri filtri URL da escludere (separati da virgola):", key="custom_exclusions_text") 
     if custom_exclusions_input:
