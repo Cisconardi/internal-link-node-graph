@@ -23,7 +23,7 @@ def crea_grafo_link_interni_streamlit(
     log_messages = []
 
     if df.empty: 
-        st.warning("Il DataFrame fornito è vuoto.")
+        # st.warning("Il DataFrame fornito è vuoto.") # Questo sarà gestito nell'app principale
         return None, ["DataFrame di input vuoto."]
 
     col_source, col_dest = 'Source', 'Destination'
@@ -34,7 +34,6 @@ def crea_grafo_link_interni_streamlit(
     for col in cols_base_req:
         if col not in df.columns:
             msg = f"Errore: Colonna base '{col}' mancante nel file CSV."
-            # st.error(msg) # st.error non può essere chiamato qui, la funzione deve restituire
             return None, [msg]
             
     if col_anchor and col_anchor not in df.columns:
@@ -46,8 +45,8 @@ def crea_grafo_link_interni_streamlit(
         colonna_tipo_record = None
 
     log_messages.append("Inizio pre-processing DataFrame...")
-    righe_correnti = len(df)
-    log_messages.append(f"Numero di righe iniziali nel DataFrame: {righe_correnti}")
+    righe_iniziali_totali = len(df)
+    log_messages.append(f"Numero di righe iniziali nel DataFrame: {righe_iniziali_totali}")
 
     df[col_source] = df[col_source].astype(str).str.strip()
     df[col_dest] = df[col_dest].astype(str).str.strip()
@@ -55,59 +54,63 @@ def crea_grafo_link_interni_streamlit(
         df[col_anchor] = df[col_anchor].astype(str).str.strip().replace('', np.nan)
 
     # Filtro per tipo di record
+    righe_prima_del_filtro_corrente = len(df)
     if colonna_tipo_record and valore_tipo_da_includere and valore_tipo_da_includere != "Nessuno":
         log_messages.append(f"Applicazione filtro tipo record: mantenimento righe se '{colonna_tipo_record}' è '{valore_tipo_da_includere}' (case-insensitive).")
         if colonna_tipo_record in df.columns:
-            righe_prima_filtro_tipo = len(df)
             df[colonna_tipo_record] = df[colonna_tipo_record].astype(str).str.strip()
             df = df[df[colonna_tipo_record].str.lower() == valore_tipo_da_includere.lower()]
-            log_messages.append(f"  Righe dopo filtro tipo record: {len(df)} ({righe_prima_filtro_tipo - len(df)} rimosse da questo filtro)")
-    # righe_correnti = len(df) # Non necessario aggiornare qui, lo facciamo dopo dropna
+            log_messages.append(f"  Righe dopo filtro tipo record: {len(df)} ({righe_prima_del_filtro_corrente - len(df)} rimosse)")
+    righe_prima_del_filtro_corrente = len(df)
 
-    righe_prima_dropna = len(df)
     df.dropna(subset=[col_source, col_dest], inplace=True)
     df = df[(df[col_source].str.len() > 0) & (df[col_dest].str.len() > 0)]
-    log_messages.append(f"Righe dopo rimozione NA/vuoti in Source/Destination: {len(df)} ({righe_prima_dropna - len(df)} rimosse)")
-    # righe_correnti = len(df) # Non necessario aggiornare qui
+    log_messages.append(f"Righe dopo rimozione NA/vuoti in Source/Destination: {len(df)} ({righe_prima_del_filtro_corrente - len(df)} rimosse)")
+    righe_prima_del_filtro_corrente = len(df)
+
 
     str_exclude_lower = [s.lower() for s in stringhe_url_da_escludere_selezionate if s] if stringhe_url_da_escludere_selezionate else []
     dom_include_lower = dominio_da_includere.lower() if dominio_da_includere else None
 
     if str_exclude_lower:
         log_messages.append(f"Filtro esclusione URL (Source/Dest): {', '.join(str_exclude_lower)}")
-        righe_prima_filtro_url = len(df)
         m_src = pd.Series([True]*len(df),index=df.index); m_dst = pd.Series([True]*len(df),index=df.index)
         for s_ex in str_exclude_lower:
             m_src &= ~df[col_source].str.lower().str.contains(s_ex, na=False, regex=False)
             m_dst &= ~df[col_dest].str.lower().str.contains(s_ex, na=False, regex=False)
         df = df[m_src & m_dst] 
-        log_messages.append(f"  Righe dopo filtro esclusione URL: {len(df)} ({righe_prima_filtro_url - len(df)} rimosse)")
-    # righe_correnti = len(df) # Non necessario
+        log_messages.append(f"  Righe dopo filtro esclusione URL: {len(df)} ({righe_prima_del_filtro_corrente - len(df)} rimosse)")
+    righe_prima_del_filtro_corrente = len(df)
 
     if dom_include_lower:
-        righe_prima_filtro_dom = len(df)
         log_messages.append(f"Filtro inclusione dominio (Dest): '{dom_include_lower}'")
         df = df[df[col_dest].str.lower().str.contains(dom_include_lower, na=False, regex=False)]
-        log_messages.append(f"  Righe dopo filtro inclusione dominio: {len(df)} ({righe_prima_filtro_dom - len(df)} rimosse)")
-    # righe_correnti = len(df) # Non necessario
+        log_messages.append(f"  Righe dopo filtro inclusione dominio: {len(df)} ({righe_prima_del_filtro_corrente - len(df)} rimosse)")
+    righe_prima_del_filtro_corrente = len(df)
         
-    righe_prima_filtro_auto = len(df)
     df = df[df[col_source] != df[col_dest]]
-    log_messages.append(f"Righe dopo rimozione auto-link: {len(df)} ({righe_prima_filtro_auto - len(df)} rimosse)")
+    log_messages.append(f"Righe dopo rimozione auto-link: {len(df)} ({righe_prima_del_filtro_corrente - len(df)} rimosse)")
     
     if df.empty: 
         log_messages.append("DataFrame vuoto post-filtri. Nessun grafo da generare."); 
-        # st.warning non può essere chiamato qui
         return None, log_messages
         
     log_messages.append("Aggregazione anchor text...")
+    
+    def aggregate_anchors_custom(series):
+        valid_anchors = series.dropna().astype(str).str.strip().unique()
+        cleaned_anchors = sorted([anchor for anchor in valid_anchors if anchor]) 
+        if not cleaned_anchors:
+            return ["Vuoto"] # Modifica richiesta dall'utente
+        return cleaned_anchors
+
     if col_anchor and col_anchor in df.columns:
         df_agg = df.groupby([col_source, col_dest]).agg(
-            Unique_Anchors=(col_anchor, lambda s: sorted(list(s.dropna().astype(str).str.strip().unique())))
+            Unique_Anchors=(col_anchor, aggregate_anchors_custom)
         ).reset_index()
     else:
         df_agg = df[[col_source, col_dest]].drop_duplicates().reset_index(drop=True)
-        df_agg['Unique_Anchors'] = [[] for _ in range(len(df_agg))]
+        df_agg['Unique_Anchors'] = [["Vuoto"] for _ in range(len(df_agg))] # Se non c'è colonna anchor, usa "Vuoto"
 
     if df_agg.empty: 
         log_messages.append("DataFrame aggregato vuoto. Nessun grafo da generare."); 
@@ -130,7 +133,6 @@ def crea_grafo_link_interni_streamlit(
         log_messages.append(f"Dati nodi esportati in '{nome_file_export_csv}'. (Salvato sul server)")
     except Exception as e: 
         log_messages.append(f"Errore esportazione CSV: {e}")
-
 
     log_messages.append("Calcolo layout...")
     pos = None; layout_3d = False
@@ -166,12 +168,18 @@ def crea_grafo_link_interni_streamlit(
     for u, v, data in G.edges(data=True):
         if u in pos and v in pos:
             pos_u, pos_v = pos[u], pos[v]
-            anchors = data.get('anchors', [])
-            hover_text_content = "N/A"
-            if anchors:
+            anchors = data.get('anchors', ["Vuoto"]) # Default a ["Vuoto"] se non presente
+            
+            hover_text_content = "N/A" # Default se anchors è vuoto o ["Vuoto"] e non viene sovrascritto
+            if anchors: # Se la lista anchors esiste (anche se è solo ["Vuoto"])
                 display_anchors = anchors[:7]
                 hover_text_content = "<br>".join(f"- {str(a)}" for a in display_anchors)
-                if len(anchors) > 7: hover_text_content += f"<br>... e altri {len(anchors) - 7} anchor(s)"
+                if len(anchors) > 7: 
+                    hover_text_content += f"<br>... e altri {len(anchors) - 7} anchor(s)"
+                elif not any(a for a in anchors if a != "Vuoto") and "Vuoto" in anchors : # Se contiene solo "Vuoto"
+                     hover_text_content = "- Vuoto"
+
+
             full_hover_text = f"<b>Link</b><br>Da: {u}<br>A: {v}<br>--- Anchor Texts ---<br>{hover_text_content}"
             edge_x.extend([pos_u[0], pos_v[0], None]); edge_y.extend([pos_u[1], pos_v[1], None])
             if layout_3d: edge_z.extend([pos_u[2], pos_v[2], None])
@@ -216,36 +224,24 @@ def crea_grafo_link_interni_streamlit(
             if layout_3d: node_traces_list.append(go.Scatter3d(x=cat_x, y=cat_y, z=cat_z, **scatter_args))
             else: node_traces_list.append(go.Scatter(x=cat_x, y=cat_y, **scatter_args))
             
-    # Modifica per il titolo del layout
     common_layout_properties = dict(
         showlegend=True, 
         legend_title_text='Categorie Nodi per Grado', 
         hovermode='closest', 
         margin=dict(b=40,l=5,r=5,t=60)
     ) 
-
     title_font_properties = dict(size=18)
     title_alignment_properties = dict(x=0.5)
 
     if layout_3d: 
         fig_layout = go.Layout(
-            title=dict(
-                text='<b>Grafo Link Interni (3D) con Anchor Text</b>', 
-                font=title_font_properties,
-                **title_alignment_properties
-            ),
-            scene=dict(bgcolor="rgba(240,240,240,0.95)"), 
-            **common_layout_properties
+            title=dict(text='<b>Grafo Link Interni (3D) con Anchor Text</b>', font=title_font_properties, **title_alignment_properties),
+            scene=dict(bgcolor="rgba(240,240,240,0.95)"), **common_layout_properties
         )
     else: 
         fig_layout = go.Layout(
-            title=dict(
-                text='<b>Grafo Link Interni (2D) con Anchor Text</b>',
-                font=title_font_properties,
-                **title_alignment_properties
-            ), 
-            plot_bgcolor='rgba(245,245,245,1)', 
-            **common_layout_properties
+            title=dict(text='<b>Grafo Link Interni (2D) con Anchor Text</b>', font=title_font_properties, **title_alignment_properties), 
+            plot_bgcolor='rgba(245,245,245,1)', **common_layout_properties
         )
     
     figura = go.Figure(data=[trace_edges] + node_traces_list, layout=fig_layout)
@@ -262,7 +258,7 @@ Carica un file CSV con i link interni (colonne richieste: `Source`, `Destination
 e personalizza i filtri per visualizzare la struttura del grafo.
 """)
 
-log_placeholder = st.empty()
+log_placeholder = st.empty() # Placeholder per i log
 
 with st.sidebar: 
     st.header("Opzioni di Filtro e Controllo")
@@ -280,35 +276,41 @@ with st.sidebar:
         '/autodiscover/autodiscover.xml'
     ]
 
-    dominio_input = st.text_input("Dominio da Includere (es. 'sitoesempio.com, www.sitoesempio.com, https://sitoesempio.com, sitoesempio.com/folder/')", value="sitoesempio.com")
+    dominio_input = st.text_input("Dominio da Includere (es. 'sitoesempio.com')", value="sitoesempio.com") # Modificato valore di default
 
-    tipo_record_opzioni = ["Nessuno", "Hyperlink", "HTTP Redirect", "HTML Canonical", "HTML Canonical", "Image"] 
+    tipo_record_opzioni = ["Nessuno", "Hyperlink", "HTTP Redirect", "HTML Canonical", "Image"] # Aggiornato con le tue opzioni
     tipo_record_selezionato = st.selectbox(
         "Valore Tipo Record da Includere (opzionale, colonna 'Type')", 
         options=tipo_record_opzioni, 
-        index=1 
+        index=1 # Default a "Hyperlink"
     )
     valore_tipo_da_usare = None if tipo_record_selezionato == "Nessuno" else tipo_record_selezionato
 
     st.markdown("---")
     st.subheader("Filtri URL da Escludere (seleziona per escludere):")
     
+    # Usa st.session_state per mantenere lo stato delle checkbox
     if 'checkbox_states' not in st.session_state:
-        st.session_state.checkbox_states = {s: True for s in default_stringhe_da_escludere}
+        # Inizializza solo se non esiste, per preservare le selezioni dell'utente tra i rerun
+        st.session_state.checkbox_states = {s_escl: True for s_escl in default_stringhe_da_escludere}
 
     stringhe_escluse_selezionate_ui = []
     for s_escl in default_stringhe_da_escludere:
-        checkbox_key = f"cb_{s_escl.replace('.', '_').replace('/', '_').replace(':', '_').replace('#','_')}"
+        # Crea una chiave univoca per ogni checkbox per evitare conflitti
+        # Sostituisci caratteri non validi per le chiavi
+        checkbox_key = f"cb_{s_escl.replace('.', '_dot_').replace('/', '_slash_').replace(':', '_colon_').replace('#','_hash_')}"
+        
+        # Se una nuova stringa di default viene aggiunta e non è in session_state, inizializzala
         if checkbox_key not in st.session_state.checkbox_states:
             st.session_state.checkbox_states[checkbox_key] = True 
 
         is_checked = st.checkbox(
             s_escl, 
             value=st.session_state.checkbox_states[checkbox_key], 
-            key=checkbox_key
+            key=checkbox_key # Usa la chiave univoca
         )
-        st.session_state.checkbox_states[checkbox_key] = is_checked 
-        if is_checked: 
+        st.session_state.checkbox_states[checkbox_key] = is_checked # Aggiorna lo stato nella sessione
+        if is_checked: # Se è selezionato, significa che vogliamo escludere questa stringa
             stringhe_escluse_selezionate_ui.append(s_escl)
     
     st.caption(f"Stringhe URL attualmente selezionate per l'esclusione: {stringhe_escluse_selezionate_ui if stringhe_escluse_selezionate_ui else 'Nessuna'}")
@@ -316,15 +318,16 @@ with st.sidebar:
     st.info("Modifica i filtri e il grafico si aggiornerà automaticamente al caricamento di un nuovo file o al cambio di un'opzione (se il file è già caricato).")
 
 
+# --- Area Principale per il Grafico ---
 if uploaded_file is not None:
     try:
         df_caricato = pd.read_csv(uploaded_file, dtype=str)
         st.success(f"File '{uploaded_file.name}' caricato con successo. ({len(df_caricato)} righe)")
 
-        with st.spinner("Generazione del grafo in corso..."):
+        with st.spinner("Generazione del grafo in corso... Questo potrebbe richiedere alcuni istanti."):
             figura_plotly, log_output = crea_grafo_link_interni_streamlit(
                 df_input=df_caricato,
-                stringhe_url_da_escludere_selezionate=stringhe_escluse_selezionate_ui,
+                stringhe_url_da_escludere_selezionate=stringhe_escluse_selezionate_ui, # Usa la lista dalla UI
                 dominio_da_includere=dominio_input if dominio_input else None,
                 nome_file_export_csv="report_nodi_grafo_streamlit.csv",
                 colonna_anchor_text="Anchor", 
@@ -332,29 +335,32 @@ if uploaded_file is not None:
                 valore_tipo_da_includere=valore_tipo_da_usare
             )
         
+        # Mostra i log usando il placeholder
         log_placeholder.text_area("Log di Pre-processing", "\n".join(log_output), height=250)
 
         if figura_plotly:
             st.plotly_chart(figura_plotly, use_container_width=True, height=800)
             st.caption("Interagisci con il grafo: zoom, pan, rotazione (3D), hover per dettagli.")
+            # Fornire un link per il download del CSV dei nodi
             try:
                 with open("report_nodi_grafo_streamlit.csv", "rb") as fp:
                     st.download_button(
                         label="Scarica Report Nodi (CSV)",
                         data=fp,
-                        file_name="report_nodi_grafo.csv",
+                        file_name="report_nodi_grafo.csv", # Nome del file per il download
                         mime="text/csv"
                     )
             except FileNotFoundError:
-                st.warning("File report nodi non ancora generato o errore nella creazione.")
+                st.warning("File report nodi ('report_nodi_grafo_streamlit.csv') non trovato sul server.")
+            except Exception as e_dl:
+                 st.warning(f"Errore nel preparare il download del report nodi: {e_dl}")
         else:
-            # Questo warning viene già mostrato all'interno della funzione se ritorna None
-            # st.warning("Impossibile generare il grafico con i filtri correnti o a causa di un errore.")
-            pass
+            # L'eventuale warning/errore specifico viene già mostrato dai log o dalla funzione
+            pass # st.warning("Impossibile generare il grafico con i filtri correnti o a causa di un errore.")
 
     except Exception as e:
         st.error(f"Errore critico durante l'elaborazione del file o la generazione del grafo: {e}")
-        st.exception(e) 
+        st.exception(e) # Mostra il traceback completo per il debug
 else:
     log_placeholder.info("Attendo il caricamento di un file CSV per visualizzare il grafo e i log.")
 
