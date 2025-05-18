@@ -13,11 +13,15 @@ def crea_grafo_link_interni_streamlit(
     nome_file_export_csv="report_nodi_grafo.csv", 
     colonna_anchor_text="Anchor",
     colonna_tipo_record="Type", 
-    valore_tipo_da_includere=None 
+    valore_tipo_da_includere=None,
+    abilita_evidenziazione_stringa_url=False, # Nuovo parametro
+    stringa_url_da_evidenziare="",           # Nuovo parametro
+    colore_evidenziazione_url="#00FF00"      # Nuovo parametro (default verde)
 ):
     """
     Genera una rappresentazione a grafo navigabile dei link interni da un DataFrame,
     restituisce la figura Plotly e salva un report CSV.
+    Aggiunta funzionalità per evidenziare nodi la cui URL contiene una stringa specifica.
     """
     df = df_input.copy() 
     log_messages = []
@@ -72,7 +76,7 @@ def crea_grafo_link_interni_streamlit(
         log_messages.append(f"Filtro esclusione URL (Source/Dest): {', '.join(str_exclude_lower)}")
         m_src = pd.Series([True]*len(df),index=df.index); m_dst = pd.Series([True]*len(df),index=df.index)
         for s_ex in str_exclude_lower:
-            if s_ex: # Assicura che la stringa di esclusione non sia vuota
+            if s_ex: 
                 m_src &= ~df[col_source].str.lower().str.contains(s_ex, na=False, regex=False)
                 m_dst &= ~df[col_dest].str.lower().str.contains(s_ex, na=False, regex=False)
         df = df[m_src & m_dst] 
@@ -166,7 +170,6 @@ def crea_grafo_link_interni_streamlit(
         if u in pos and v in pos:
             pos_u, pos_v = pos[u], pos[v]
             anchors = data.get('anchors', ["Vuoto"]) 
-            
             hover_text_content = "N/A" 
             if anchors: 
                 display_anchors = anchors[:7]
@@ -175,7 +178,6 @@ def crea_grafo_link_interni_streamlit(
                     hover_text_content += f"<br>... e altri {len(anchors) - 7} anchor(s)"
                 elif not any(a for a in anchors if a != "Vuoto") and "Vuoto" in anchors : 
                      hover_text_content = "- Vuoto"
-
             full_hover_text = f"<b>Link</b><br>Da: {u}<br>A: {v}<br>--- Anchor Texts ---<br>{hover_text_content}"
             edge_x.extend([pos_u[0], pos_v[0], None]); edge_y.extend([pos_u[1], pos_v[1], None])
             if layout_3d: edge_z.extend([pos_u[2], pos_v[2], None])
@@ -188,8 +190,10 @@ def crea_grafo_link_interni_streamlit(
     node_degrees = dict(G.degree())
     node_values = list(node_degrees.values()) if node_degrees else []
     node_traces_list = []
-    node_colors = {'Basso Grado': 'blue', 'Medio Grado': 'orange', 'Alto Grado': 'red'}
+    default_node_colors_by_category = {'Basso Grado': 'blue', 'Medio Grado': 'orange', 'Alto Grado': 'red'}
     
+    stringa_url_da_evidenziare_lower = stringa_url_da_evidenziare.lower().strip() if abilita_evidenziazione_stringa_url and stringa_url_da_evidenziare else ""
+
     if node_values:
         q33, q67 = (np.percentile(node_values,33), np.percentile(node_values,67)) if len(set(node_values))>2 else (min(node_values, default=0),max(node_values, default=0))
         if q33 == q67 and len(set(node_values)) > 1: q33 = min(node_values, default=0); q67 = np.percentile(node_values, 50)
@@ -205,6 +209,8 @@ def crea_grafo_link_interni_streamlit(
         for cat_name, nodes_in_cat in nodes_cat_data.items():
             if not nodes_in_cat: continue
             cat_x, cat_y, cat_z, cat_text, cat_size, cat_customdata = [], [], [], [], [], []
+            node_marker_colors_list = [] # Lista di colori per questa traccia specifica
+
             for node_id in nodes_in_cat:
                 if node_id not in pos: continue
                 cat_x.append(pos[node_id][0]); cat_y.append(pos[node_id][1])
@@ -215,7 +221,15 @@ def crea_grafo_link_interni_streamlit(
                 cat_size.append(max(5, min(15, size_val * 1.5 if size_val > 0 else 5)))
                 cat_customdata.append(node_id) 
 
-            marker_style = dict(color=node_colors[cat_name], size=cat_size, opacity=0.9, line=dict(width=0.5, color='#333'))
+                # Logica di colorazione personalizzata
+                current_node_color = default_node_colors_by_category[cat_name] # Colore di default per la categoria
+                if abilita_evidenziazione_stringa_url and stringa_url_da_evidenziare_lower:
+                    if stringa_url_da_evidenziare_lower in node_id.lower():
+                        current_node_color = colore_evidenziazione_url
+                node_marker_colors_list.append(current_node_color)
+
+
+            marker_style = dict(color=node_marker_colors_list, size=cat_size, opacity=0.9, line=dict(width=0.5, color='#333')) # Usa la lista di colori
             scatter_args = dict(name=cat_name, mode='markers', hoverinfo='text', text=cat_text, marker=marker_style, customdata=cat_customdata) 
             if layout_3d: node_traces_list.append(go.Scatter3d(x=cat_x, y=cat_y, z=cat_z, **scatter_args))
             else: node_traces_list.append(go.Scatter(x=cat_x, y=cat_y, **scatter_args))
@@ -303,17 +317,25 @@ with st.sidebar:
         if is_checked: 
             stringhe_escluse_selezionate_ui.append(s_escl)
     
-    # Nuovo campo per filtri personalizzati
-    custom_exclusions_input = st.text_input("Altri filtri URL da escludere (separati da virgola):", key="custom_exclusions")
-    custom_exclusions_list = []
+    custom_exclusions_input = st.text_input("Altri filtri URL da escludere (separati da virgola):", key="custom_exclusions_text")
     if custom_exclusions_input:
         custom_exclusions_list = [item.strip() for item in custom_exclusions_input.split(',') if item.strip()]
-        stringhe_escluse_selezionate_ui.extend(custom_exclusions_list) # Aggiungi alla lista principale
-        # Rimuovi duplicati se necessario, anche se il filtro `str.contains` non ne risente molto
-        stringhe_escluse_selezionate_ui = sorted(list(set(stringhe_escluse_selezionate_ui)))
-
+        stringhe_escluse_selezionate_ui.extend(custom_exclusions_list) 
+        stringhe_escluse_selezionate_ui = sorted(list(set(stringhe_escluse_selezionate_ui))) # Rimuovi duplicati e ordina
 
     st.caption(f"Stringhe URL totali per l'esclusione: {stringhe_escluse_selezionate_ui if stringhe_escluse_selezionate_ui else 'Nessuna'}")
+    
+    st.markdown("---")
+    st.subheader("Evidenziazione URL Personalizzata")
+    abilita_evidenziazione_stringa = st.checkbox("Abilita evidenziazione URL per stringa", key="enable_highlight_str")
+    
+    stringa_da_cercare_per_colore = ""
+    colore_scelto_per_stringa = "#00FF00" # Default verde
+
+    if abilita_evidenziazione_stringa:
+        stringa_da_cercare_per_colore = st.text_input("Stringa da cercare nell'URL del nodo (case-insensitive):", key="highlight_str_text")
+        colore_scelto_per_stringa = st.color_picker("Colore di evidenziazione per la stringa:", value="#00FF00", key="highlight_color")
+
     st.markdown("---")
     st.info("Modifica i filtri e il grafico si aggiornerà automaticamente al caricamento di un nuovo file o al cambio di un'opzione (se il file è già caricato).")
 
@@ -331,7 +353,10 @@ if uploaded_file is not None:
                 nome_file_export_csv="report_nodi_grafo_streamlit.csv",
                 colonna_anchor_text="Anchor", 
                 colonna_tipo_record="Type",   
-                valore_tipo_da_includere=valore_tipo_da_usare
+                valore_tipo_da_includere=valore_tipo_da_usare,
+                abilita_evidenziazione_stringa_url=abilita_evidenziazione_stringa, # Passa il nuovo parametro
+                stringa_url_da_evidenziare=stringa_da_cercare_per_colore,         # Passa il nuovo parametro
+                colore_evidenziazione_url=colore_scelto_per_stringa             # Passa il nuovo parametro
             )
         
         log_placeholder.text_area("Log di Pre-processing", "\n".join(log_output), height=250)
@@ -340,6 +365,9 @@ if uploaded_file is not None:
             st.plotly_chart(figura_plotly, use_container_width=True, height=800)
             st.caption("Interagisci con il grafo: zoom, pan, rotazione (3D), hover per dettagli.")
             try:
+                # Verifica se il file esiste prima di tentare di aprirlo per il download
+                # Questo è più un problema se l'app gira su un server dove il file potrebbe non essere persistente
+                # o se la creazione del file fallisce.
                 with open("report_nodi_grafo_streamlit.csv", "rb") as fp:
                     st.download_button(
                         label="Scarica Report Nodi (CSV)",
@@ -348,10 +376,12 @@ if uploaded_file is not None:
                         mime="text/csv"
                     )
             except FileNotFoundError:
-                st.warning("File report nodi ('report_nodi_grafo_streamlit.csv') non trovato sul server.")
+                st.warning("File report nodi ('report_nodi_grafo_streamlit.csv') non trovato. Potrebbe non essere stato ancora generato o c'è stato un errore.")
             except Exception as e_dl:
                  st.warning(f"Errore nel preparare il download del report nodi: {e_dl}")
         else:
+            # L'eventuale warning/errore specifico viene già mostrato dai log o dalla funzione
+            # st.warning("Impossibile generare il grafico con i filtri correnti o a causa di un errore.")
             pass
 
     except Exception as e:
