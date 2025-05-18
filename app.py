@@ -286,11 +286,11 @@ def crea_grafo_link_interni_streamlit(
 # --- Applicazione Streamlit ---
 st.set_page_config(layout="wide", page_title="Visualizzatore Grafo Link Interni")
 
-st.title("🌐 Visualizzatore Interattivo Grafo Link Interni 🔗")
+st.title("🌐 Visualizzatore Interattivo Grafo Link Interni")
 
 st.markdown("""
-Benvenuto! Questa applicazione ti aiuta a esplorare la struttura dei link interni del tuo sito web. 
-Visualizza le connessioni tra le pagine come un grafo interattivo, permettendoti di identificare 
+Ciao! Questa applicazione ti aiuta a esplorare la struttura dei link interni del tuo sito web. 
+Visualizza le connessioni tra le pagine come un grafo (nodi=URL unici, archi=link tra 2 URL unici), permettendoti di identificare 
 pattern, pagine isolate, e molto altro.
 
 **Come funziona?** 🗺️
