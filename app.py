@@ -17,9 +17,9 @@ def crea_grafo_link_interni_streamlit(
     abilita_evidenziazione_stringa_url=False,
     stringa_url_da_evidenziare="",          
     colore_evidenziazione_url="#00FF00",     
-    abilita_evidenziazione_anchor_arco=False, # Nuovo parametro per archi
-    stringa_anchor_da_evidenziare="",        # Nuovo parametro per archi
-    colore_evidenziazione_anchor_arco="#FF03EC" # Nuovo parametro per archi (default viola)
+    abilita_evidenziazione_anchor_arco=False, 
+    stringa_anchor_da_evidenziare="",        
+    colore_evidenziazione_anchor_arco="#800080" 
 ):
     """
     Genera una rappresentazione a grafo navigabile dei link interni da un DataFrame,
@@ -168,7 +168,6 @@ def crea_grafo_link_interni_streamlit(
 
     log_messages.append("Preparazione visualizzazione Plotly...")
     
-    # Preparazione tracce archi (default e evidenziati)
     default_edge_x, default_edge_y, default_edge_z, default_edge_hover_texts = [], [], [], []
     highlight_edge_x, highlight_edge_y, highlight_edge_z, highlight_edge_hover_texts = [], [], [], []
     
@@ -178,7 +177,6 @@ def crea_grafo_link_interni_streamlit(
         if u in pos and v in pos:
             pos_u, pos_v = pos[u], pos[v]
             anchors = data.get('anchors', ["Vuoto"]) 
-            
             hover_text_content = "N/A" 
             if anchors: 
                 display_anchors = anchors[:7]
@@ -189,7 +187,6 @@ def crea_grafo_link_interni_streamlit(
                      hover_text_content = "- Vuoto"
             full_hover_text = f"<b>Link</b><br>Da: {u}<br>A: {v}<br>--- Anchor Texts ---<br>{hover_text_content}"
 
-            # Determina se l'arco deve essere evidenziato
             evidenzia_arco = False
             if abilita_evidenziazione_anchor_arco and stringa_anchor_lower:
                 for anchor in anchors:
@@ -209,22 +206,17 @@ def crea_grafo_link_interni_streamlit(
                 default_edge_hover_texts.extend([full_hover_text, full_hover_text, None])
 
     traces = []
-    # Traccia archi di default
     trace_default_edges_args = dict(line=dict(width=0.7, color='#888'), mode='lines', hoverinfo='text', text=default_edge_hover_texts, opacity=0.7, name='Archi')
     if layout_3d: traces.append(go.Scatter3d(x=default_edge_x, y=default_edge_y, z=default_edge_z, **trace_default_edges_args))
     else: traces.append(go.Scatter(x=default_edge_x, y=default_edge_y, **trace_default_edges_args))
 
-    # Traccia archi evidenziati (se ce ne sono)
-    if highlight_edge_x: # Aggiungi solo se ci sono archi da evidenziare
+    if highlight_edge_x: 
         trace_highlight_edges_args = dict(line=dict(width=1.5, color=colore_evidenziazione_anchor_arco), mode='lines', hoverinfo='text', text=highlight_edge_hover_texts, opacity=0.9, name='Archi Evidenziati')
         if layout_3d: traces.append(go.Scatter3d(x=highlight_edge_x, y=highlight_edge_y, z=highlight_edge_z, **trace_highlight_edges_args))
         else: traces.append(go.Scatter(x=highlight_edge_x, y=highlight_edge_y, **trace_highlight_edges_args))
 
-
-    # Nodi (logica di colorazione URL e per categoria)
     node_degrees = dict(G.degree())
     node_values = list(node_degrees.values()) if node_degrees else []
-    # node_traces_list = [] # Verrà aggiunta a `traces`
     default_node_colors_by_category = {'Basso Grado': 'blue', 'Medio Grado': 'orange', 'Alto Grado': 'red'}
     stringa_url_da_evidenziare_lower = stringa_url_da_evidenziare.lower().strip() if abilita_evidenziazione_stringa_url and stringa_url_da_evidenziare else ""
 
@@ -268,7 +260,7 @@ def crea_grafo_link_interni_streamlit(
             
     common_layout_properties = dict(
         showlegend=True, 
-        legend_title_text='Legenda', # Titolo legenda più generico
+        legend_title_text='Legenda', 
         hovermode='closest', 
         margin=dict(b=40,l=5,r=5,t=60)
     ) 
@@ -286,7 +278,7 @@ def crea_grafo_link_interni_streamlit(
             plot_bgcolor='rgba(245,245,245,1)', **common_layout_properties
         )
     
-    figura = go.Figure(data=traces, layout=fig_layout) # Usa la lista `traces` combinata
+    figura = go.Figure(data=traces, layout=fig_layout) 
     log_messages.append("Visualizzazione grafico completata.")
     return figura, log_messages
 
@@ -300,7 +292,7 @@ Carica un file CSV con i link interni (colonne richieste: `Source`, `Destination
 e personalizza i filtri per visualizzare la struttura del grafo.
 """)
 
-log_placeholder = st.empty() 
+log_placeholder_container = st.empty() # Contenitore per l'expander dei log
 
 with st.sidebar: 
     st.header("Opzioni di Filtro e Controllo")
@@ -370,7 +362,7 @@ with st.sidebar:
     st.subheader("Evidenziazione Anchor Text Archi")
     abilita_evidenziazione_anchor_ui = st.checkbox("Abilita evidenziazione anchor text per archi", key="enable_highlight_anchor_str")
     stringa_da_cercare_anchor_ui = ""
-    colore_scelto_anchor_ui = "#800080" # Viola di default
+    colore_scelto_anchor_ui = "#800080" 
     if abilita_evidenziazione_anchor_ui:
         stringa_da_cercare_anchor_ui = st.text_input("Stringa da cercare nell'anchor text (case-insensitive):", key="highlight_anchor_str_text")
         colore_scelto_anchor_ui = st.color_picker("Colore di evidenziazione per anchor arco:", value="#800080", key="highlight_anchor_color")
@@ -397,12 +389,14 @@ if uploaded_file is not None:
                 abilita_evidenziazione_stringa_url=abilita_evidenziazione_stringa_url_ui, 
                 stringa_url_da_evidenziare=stringa_da_cercare_url_ui,        
                 colore_evidenziazione_url=colore_scelto_url_ui,
-                abilita_evidenziazione_anchor_arco=abilita_evidenziazione_anchor_ui, # Passa nuovo parametro
-                stringa_anchor_da_evidenziare=stringa_da_cercare_anchor_ui,       # Passa nuovo parametro
-                colore_evidenziazione_anchor_arco=colore_scelto_anchor_ui         # Passa nuovo parametro
+                abilita_evidenziazione_anchor_arco=abilita_evidenziazione_anchor_ui, 
+                stringa_anchor_da_evidenziare=stringa_da_cercare_anchor_ui,       
+                colore_evidenziazione_anchor_arco=colore_scelto_anchor_ui         
             )
         
-        log_placeholder.text_area("Log di Pre-processing", "\n".join(log_output), height=250)
+        # Mostra i log usando l'expander all'interno del placeholder
+        with log_placeholder_container.expander("Log di Pre-processing", expanded=False):
+            st.text("\n".join(log_output))
 
         if figura_plotly:
             st.plotly_chart(figura_plotly, use_container_width=True, height=800)
@@ -420,11 +414,17 @@ if uploaded_file is not None:
             except Exception as e_dl:
                  st.warning(f"Errore nel preparare il download del report nodi: {e_dl}")
         else:
-            pass
+            # Se figura_plotly è None, significa che la funzione ha restituito un errore gestito
+            # e i messaggi di log dovrebbero già contenere l'avviso.
+            # Potremmo aggiungere un messaggio qui se log_output è vuoto per qualche motivo.
+            if not log_output: # Se per caso i log sono vuoti ma la figura è None
+                 st.warning("Impossibile generare il grafico con i filtri correnti o a causa di un errore non specificato nei log.")
+
 
     except Exception as e:
         st.error(f"Errore critico durante l'elaborazione del file o la generazione del grafo: {e}")
         st.exception(e) 
 else:
-    log_placeholder.info("Attendo il caricamento di un file CSV per visualizzare il grafo e i log.")
+    with log_placeholder_container.container(): # Usa .container() per il messaggio iniziale
+        st.info("Attendo il caricamento di un file CSV per visualizzare il grafo e i log.")
 
