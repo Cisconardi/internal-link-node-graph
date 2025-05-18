@@ -286,7 +286,7 @@ def crea_grafo_link_interni_streamlit(
 # --- Applicazione Streamlit ---
 st.set_page_config(layout="wide", page_title="Visualizzatore Grafo Link Interni")
 
-st.title("🌐 Visualizzatore Interattivo Grafo Link Interni")
+st.title("🌐 Grafo per Link Interni")
 
 st.markdown("""
 Ciao! Questa applicazione ti aiuta a esplorare la struttura dei link interni del tuo sito web. 
@@ -295,22 +295,22 @@ pattern, pagine isolate, e molto altro.
 
 **Come funziona?** 🗺️
 
-1.  **⬆️ Carica il tuo File**: Utilizza la sidebar per caricare un file CSV contenente i dati dei link.
-    * **Colonne Richieste**: `Source` (URL di origine), `Destination` (URL di destinazione).
+1.  **⬆️ Carica il tuo File**: Utilizza la sidebar per caricare l'export internal link all da Screaming Frog.
+    * **Colonne Richieste**: `Source` (URL di origine), `Destination` (URL di destinazione). Usa SF in inglese mi raccomando!
     * **Colonne Opzionali**: 
         * `Anchor` (il testo dell'anchor text del link).
         * `Type` (il tipo di link, es. "Hyperlink", "HTTP Redirect").
 2.  **⚙️ Personalizza i Filtri**: Nella sidebar, puoi:
-    * Definire un **dominio specifico** da includere (per concentrarti sui link interni).
+    * Definire un **dominio specifico** da includere (consiglio: sfrutta le varianti wwww, non www, https:// e http://).
     * Filtrare per **tipo di record** (es. visualizzare solo "Hyperlink").
-    * **Escludere URL** che contengono stringhe specifiche (es. `.css`, `.jpg`) tramite checkbox o inserendo valori personalizzati.
+    * **Escludere URL** che contengono stringhe specifiche (es. `.css`, `.jpg`) tramite checkbox o inserendo valori personalizzati separati da virgola.
 3.  **🎨 Evidenziazione Personalizzata**:
     * Colora i **nodi** (pagine) la cui URL contiene una stringa a tua scelta.
     * Colora gli **archi** (link) il cui anchor text contiene una stringa a tua scelta.
 4.  **🔎 Esplora il Grafo**: Il grafo verrà visualizzato nell'area principale.
     * Interagisci zoomando, spostandoti e ruotando (se in 3D).
     * Passa il mouse sopra nodi e archi per visualizzare dettagli.
-5.  **📊 Analizza i Log**: Un log di pre-processing (espandibile) ti mostrerà come i filtri influenzano i dati.
+5.  **📊 Analizza i Log**: Un log di pre-processing ti mostrerà come i filtri influenzano i dati.
 6.  **💾 Scarica il Report**: Puoi scaricare un riepilogo dei nodi del grafo generato.
 
 Inizia caricando il tuo file e sperimentando con i filtri!
@@ -337,7 +337,7 @@ with st.sidebar:
 
     tipo_record_opzioni = ["Nessuno", "Hyperlink", "HTTP Redirect", "HTML Canonical", "Image"] 
     tipo_record_selezionato = st.selectbox(
-        "🏷️ Valore Tipo Record da Includere (opzionale, colonna 'Type')",  
+        "🏷️ Tipo di link da analizzare (opzionale, colonna 'Type')",  
         options=tipo_record_opzioni, 
         index=1 
     )
