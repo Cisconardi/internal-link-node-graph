@@ -286,22 +286,21 @@ def crea_grafo_link_interni_streamlit(
 # --- Applicazione Streamlit ---
 st.set_page_config(layout="wide", page_title="Visualizzatore Grafo Link Interni")
 
-st.title("🌐 Visualizzatore Interattivo Grafo Link Interni 🔗")
+st.title("Grafo per Link Interni navigabile")
 
 st.markdown("""
 Benvenuto! Questa applicazione ti aiuta a esplorare la struttura dei link interni del tuo sito web. 
-Visualizza le connessioni tra le pagine come un grafo interattivo, permettendoti di identificare 
-pattern, pagine isolate, e molto altro.
+Visualizza le connessioni tra le pagine come un grafo (nodi = URL unici, archi = link unici tra 2 URL).
 
 **Come funziona?** 🗺️
 
-1.  **⬆️ Carica il tuo File**: Utilizza la sidebar per caricare un file CSV contenente i dati dei link.
+1.  **⬆️ Carica il tuo File**: Utilizza la sidebar per caricare l'export di Screaming Frog all_inlinks.
     * **Colonne Richieste**: `Source` (URL di origine), `Destination` (URL di destinazione).
     * **Colonne Opzionali**: 
         * `Anchor` (il testo dell'anchor text del link).
         * `Type` (il tipo di link, es. "Hyperlink", "HTTP Redirect").
 2.  **⚙️ Personalizza i Filtri**: Nella sidebar, puoi:
-    * Definire un **dominio specifico** da includere (per concentrarti sui link interni).
+    * Definire un **dominio specifico** da includere (per concentrarti sui link interni, accettate tutte le variabili www, senza www, http, https etc.).
     * Filtrare per **tipo di record** (es. visualizzare solo "Hyperlink").
     * **Escludere URL** che contengono stringhe specifiche (es. `.css`, `.jpg`) tramite checkbox o inserendo valori personalizzati.
 3.  **🎨 Evidenziazione Personalizzata**:
@@ -448,4 +447,12 @@ if uploaded_file is not None:
 else:
     with log_placeholder_container.container(): 
         st.info("⏳ Attendo il caricamento di un file CSV per visualizzare il grafo e i log.") # Aggiunto emoji
-
+st.markdown("---") # Una linea orizzontale per separare
+st.markdown(
+    """
+    <div style="text-align: center; padding: 10px;">
+        Made with ❤️ by <a href="https://www.linkedin.com/in/francisco-nardi-212b338b/" target="_blank">Francisco Nardi</a>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
