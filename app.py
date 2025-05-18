@@ -292,7 +292,7 @@ st.markdown("""
 Benvenuto! Questa applicazione ti aiuta a esplorare la struttura dei link interni del tuo sito web. 
 Visualizza le connessioni tra le pagine come un grafo (nodi = URL unici, archi = link unici tra 2 URL).
 
-**Come funziona?** 🗺️
+**Come funziona?** 🤔
 
 1.  **⬆️ Carica il tuo File**: Utilizza la sidebar per caricare l'export di Screaming Frog all_inlinks.
     * **Colonne Richieste**: `Source` (URL di origine), `Destination` (URL di destinazione).
