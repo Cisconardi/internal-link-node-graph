@@ -19,7 +19,7 @@ def crea_grafo_link_interni_streamlit(
     colore_evidenziazione_url="#00FF00",     
     abilita_evidenziazione_anchor_arco=False, # Nuovo parametro per archi
     stringa_anchor_da_evidenziare="",        # Nuovo parametro per archi
-    colore_evidenziazione_anchor_arco="#800080" # Nuovo parametro per archi (default viola)
+    colore_evidenziazione_anchor_arco="#FF03EC" # Nuovo parametro per archi (default viola)
 ):
     """
     Genera una rappresentazione a grafo navigabile dei link interni da un DataFrame,
