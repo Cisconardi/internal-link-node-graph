@@ -21,14 +21,13 @@ def crea_grafo_link_interni_streamlit(
     abilita_evidenziazione_anchor_arco=False, 
     stringa_anchor_da_evidenziare="",        
     colore_evidenziazione_anchor_arco="#800080",
-    abilita_colorazione_status_arco=False, # Nuovo
-    colonna_status_code_nome="Status Code", # Nuovo
-    colori_status_code=None # Nuovo: dizionario con i colori per status
+    abilita_colorazione_status_arco=False, 
+    colonna_status_code_nome="Status Code", 
+    map_status_code_a_colore=None # Nuovo: dizionario {status_code_str: colore_hex}
 ):
     """
     Genera una rappresentazione a grafo navigabile dei link interni da un DataFrame,
     restituisce la figura Plotly e salva un report CSV.
-    Aggiunta funzionalità per evidenziare nodi e archi per URL, anchor e status code.
     """
     df = df_input.copy() 
     log_messages = []
@@ -40,6 +39,7 @@ def crea_grafo_link_interni_streamlit(
     col_anchor = colonna_anchor_text
     col_status = colonna_status_code_nome
     
+    # ... (Controlli colonne e pre-processing iniziale identici alla versione precedente) ...
     cols_base_req = [col_source, col_dest]
     for col in cols_base_req:
         if col not in df.columns:
@@ -47,16 +47,14 @@ def crea_grafo_link_interni_streamlit(
             return None, [msg]
             
     if col_anchor and col_anchor not in df.columns:
-        log_messages.append(f"Avviso: Colonna anchor '{col_anchor}' specificata ma non trovata. Gli archi non avranno info sugli anchor.")
+        log_messages.append(f"Avviso: Colonna anchor '{col_anchor}' specificata ma non trovata.")
         col_anchor = None 
-
     if colonna_tipo_record and colonna_tipo_record not in df.columns:
-        log_messages.append(f"Avviso: Colonna tipo record '{colonna_tipo_record}' specificata ma non trovata. Il filtro per tipo di record verrà saltato.")
+        log_messages.append(f"Avviso: Colonna tipo record '{colonna_tipo_record}' specificata ma non trovata.")
         colonna_tipo_record = None
-        
     if abilita_colorazione_status_arco and col_status and col_status not in df.columns:
-        log_messages.append(f"Avviso: Colorazione archi per status code abilitata, ma colonna '{col_status}' non trovata. La colorazione per status verrà saltata.")
-        abilita_colorazione_status_arco = False # Disabilita se la colonna non c'è
+        log_messages.append(f"Avviso: Colorazione archi per status abilitata, ma colonna '{col_status}' non trovata.")
+        abilita_colorazione_status_arco = False
 
     log_messages.append("Inizio pre-processing DataFrame...")
     righe_iniziali_totali = len(df)
@@ -66,29 +64,28 @@ def crea_grafo_link_interni_streamlit(
     df[col_dest] = df[col_dest].astype(str).str.strip()
     if col_anchor and col_anchor in df.columns: 
         df[col_anchor] = df[col_anchor].astype(str).str.strip().replace('', np.nan)
-    if col_status and col_status in df.columns: # Pulisci anche la colonna status code
+    if col_status and col_status in df.columns:
         df[col_status] = df[col_status].astype(str).str.strip().replace('', np.nan)
-
 
     righe_prima_del_filtro_corrente = len(df)
     if colonna_tipo_record and valore_tipo_da_includere and valore_tipo_da_includere != "Nessuno":
-        log_messages.append(f"Applicazione filtro tipo record: mantenimento righe se '{colonna_tipo_record}' è '{valore_tipo_da_includere}' (case-insensitive).")
+        log_messages.append(f"Filtro tipo record: '{colonna_tipo_record}' == '{valore_tipo_da_includere}'")
         if colonna_tipo_record in df.columns:
             df[colonna_tipo_record] = df[colonna_tipo_record].astype(str).str.strip()
             df = df[df[colonna_tipo_record].str.lower() == valore_tipo_da_includere.lower()]
-            log_messages.append(f"  Righe dopo filtro tipo record: {len(df)} ({righe_prima_del_filtro_corrente - len(df)} rimosse)")
+            log_messages.append(f"  Righe dopo filtro tipo: {len(df)} ({righe_prima_del_filtro_corrente - len(df)} rimosse)")
     righe_prima_del_filtro_corrente = len(df)
 
-    df.dropna(subset=[col_source, col_dest], inplace=True) # Rimuovi NaN solo per source e dest obbligatori
+    df.dropna(subset=[col_source, col_dest], inplace=True)
     df = df[(df[col_source].str.len() > 0) & (df[col_dest].str.len() > 0)]
-    log_messages.append(f"Righe dopo rimozione NA/vuoti in Source/Destination: {len(df)} ({righe_prima_del_filtro_corrente - len(df)} rimosse)")
+    log_messages.append(f"Righe dopo rimozione NA/vuoti Source/Dest: {len(df)} ({righe_prima_del_filtro_corrente - len(df)} rimosse)")
     righe_prima_del_filtro_corrente = len(df)
 
     str_exclude_lower = [s.lower().strip() for s in stringhe_url_da_escludere_selezionate if s and s.strip()] if stringhe_url_da_escludere_selezionate else []
     dom_include_lower = dominio_da_includere.lower().strip() if dominio_da_includere and dominio_da_includere.strip() else None
 
     if str_exclude_lower:
-        log_messages.append(f"Filtro esclusione URL (Source/Dest): {', '.join(str_exclude_lower)}")
+        log_messages.append(f"Filtro esclusione URL: {', '.join(str_exclude_lower)}")
         m_src = pd.Series([True]*len(df),index=df.index); m_dst = pd.Series([True]*len(df),index=df.index)
         for s_ex in str_exclude_lower:
             if s_ex: 
@@ -99,7 +96,7 @@ def crea_grafo_link_interni_streamlit(
     righe_prima_del_filtro_corrente = len(df)
 
     if dom_include_lower:
-        log_messages.append(f"Filtro inclusione dominio (Dest): '{dom_include_lower}'")
+        log_messages.append(f"Filtro inclusione dominio: '{dom_include_lower}'")
         df = df[df[col_dest].str.lower().str.contains(dom_include_lower, na=False, regex=False)]
         log_messages.append(f"  Righe dopo filtro inclusione dominio: {len(df)} ({righe_prima_del_filtro_corrente - len(df)} rimosse)")
     righe_prima_del_filtro_corrente = len(df)
@@ -108,8 +105,7 @@ def crea_grafo_link_interni_streamlit(
     log_messages.append(f"Righe dopo rimozione auto-link: {len(df)} ({righe_prima_del_filtro_corrente - len(df)} rimosse)")
     
     if df.empty: 
-        log_messages.append("DataFrame vuoto post-filtri. Nessun grafo da generare."); 
-        return None, log_messages
+        log_messages.append("DataFrame vuoto post-filtri."); return None, log_messages
         
     log_messages.append("Aggregazione anchor text e status code...")
     
@@ -120,64 +116,52 @@ def crea_grafo_link_interni_streamlit(
         return cleaned_anchors
 
     def get_representative_status_code(series):
-        # Rimuovi NaN, converti in stringa, togli spazi, filtra stringhe vuote
         valid_statuses = [str(s).strip() for s in series.dropna() if str(s).strip()]
-        if not valid_statuses:
-            return "Sconosciuto"
-        # Trova il più frequente
-        count = Counter(valid_statuses)
-        most_common = count.most_common(1)
+        if not valid_statuses: return "Sconosciuto"
+        count = Counter(valid_statuses); most_common = count.most_common(1)
         return most_common[0][0]
 
-    agg_functions = {}
+    agg_dict = {}
     if col_anchor and col_anchor in df.columns:
-        agg_functions['Unique_Anchors'] = (col_anchor, aggregate_anchors_custom)
-    
-    # Solo se la colonna status esiste e la colorazione è abilitata
+        agg_dict['Unique_Anchors'] = (col_anchor, aggregate_anchors_custom)
     if abilita_colorazione_status_arco and col_status and col_status in df.columns:
-        agg_functions['Rep_Status_Code'] = (col_status, get_representative_status_code)
+         agg_dict['Rep_Status_Code'] = (col_status, get_representative_status_code)
 
-    if not agg_functions: # Se non ci sono colonne opzionali da aggregare
+    if agg_dict:
+        df_agg = df.groupby([col_source, col_dest]).agg(**agg_dict).reset_index()
+    else: # Nessuna colonna opzionale da aggregare
         df_agg = df[[col_source, col_dest]].drop_duplicates().reset_index(drop=True)
-        if col_anchor: df_agg['Unique_Anchors'] = [["Vuoto"] for _ in range(len(df_agg))]
-        if abilita_colorazione_status_arco and col_status: df_agg['Rep_Status_Code'] = "Sconosciuto"
-    else:
-        df_agg = df.groupby([col_source, col_dest]).agg(**agg_functions).reset_index()
-        if 'Unique_Anchors' not in df_agg.columns and col_anchor: # Assicura che la colonna esista
-             df_agg['Unique_Anchors'] = [["Vuoto"] for _ in range(len(df_agg))]
-        if 'Rep_Status_Code' not in df_agg.columns and abilita_colorazione_status_arco and col_status:
-             df_agg['Rep_Status_Code'] = "Sconosciuto"
+
+    # Assicura che le colonne esistano anche se non aggregate
+    if 'Unique_Anchors' not in df_agg.columns:
+        df_agg['Unique_Anchors'] = [["Vuoto"] for _ in range(len(df_agg))]
+    if 'Rep_Status_Code' not in df_agg.columns:
+        df_agg['Rep_Status_Code'] = "Sconosciuto"
 
 
-    if df_agg.empty: 
-        log_messages.append("DataFrame aggregato vuoto. Nessun grafo da generare."); 
-        return None, log_messages
+    if df_agg.empty: log_messages.append("DataFrame aggregato vuoto."); return None, log_messages
     log_messages.append(f"Archi unici per grafo: {len(df_agg)}")
 
     G = nx.DiGraph()
     for _, riga in df_agg.iterrows():
-        anchors_data = riga.get('Unique_Anchors', ["Vuoto"])
-        status_data = riga.get('Rep_Status_Code', "Sconosciuto") if abilita_colorazione_status_arco else "Sconosciuto"
-        G.add_edge(riga[col_source], riga[col_dest], anchors=anchors_data, status_code=status_data)
+        G.add_edge(riga[col_source], riga[col_dest], 
+                   anchors=riga['Unique_Anchors'], 
+                   status_code=riga['Rep_Status_Code'])
 
-
-    log_messages.append(f"Nodi nel grafo: {G.number_of_nodes()}, Archi nel grafo: {G.number_of_edges()}")
-    if G.number_of_nodes() == 0: 
-        log_messages.append("Grafo vuoto."); 
-        return None, log_messages
+    log_messages.append(f"Nodi: {G.number_of_nodes()}, Archi: {G.number_of_edges()}")
+    if G.number_of_nodes() == 0: log_messages.append("Grafo vuoto."); return None, log_messages
 
     try:
         pd.DataFrame(
             [{'Nodo_URL': n, 'OutDegree': G.out_degree(n), 'InDegree': G.in_degree(n)} for n in G.nodes()]
         ).to_csv(nome_file_export_csv, index=False, encoding='utf-8-sig')
-        log_messages.append(f"Dati nodi esportati in '{nome_file_export_csv}'. (Salvato sul server)")
-    except Exception as e: 
-        log_messages.append(f"Errore esportazione CSV: {e}")
+        log_messages.append(f"Dati nodi esportati in '{nome_file_export_csv}'.")
+    except Exception as e: log_messages.append(f"Errore esportazione CSV: {e}")
 
     log_messages.append("Calcolo layout...")
-    pos = None; layout_3d = False
-    node_count = G.number_of_nodes()
-    if 0 < node_count < 100000:
+    pos = None; layout_3d = False; node_count = G.number_of_nodes()
+    # Aumentata soglia per layout 3D
+    if 0 < node_count < 100000: # Soglia aumentata
         try: 
             k_val = (0.5/np.sqrt(node_count) if node_count >0 else 0.5)
             pos = nx.spring_layout(G, dim=3, k=k_val, iterations=50, seed=42, scale=3)
@@ -195,30 +179,31 @@ def crea_grafo_link_interni_streamlit(
                 pos = nx.kamada_kawai_layout(G, dim=2, scale=3)
                 layout_3d = False; log_messages.append("Layout 2D (kamada_kawai) calcolato.")
             except Exception as e_2d_k: 
-                log_messages.append(f"Errore tutti i layout ({e_2d_k}). Visualizzazione annullata."); 
-                return None, log_messages
+                log_messages.append(f"Errore tutti i layout ({e_2d_k})."); return None, log_messages
     
-    if pos is None: 
-        log_messages.append("Layout non calcolato. Visualizzazione annullata."); 
-        return None, log_messages
+    if pos is None: log_messages.append("Layout non calcolato."); return None, log_messages
 
     log_messages.append("Preparazione visualizzazione Plotly...")
     
     # Preparazione dati per tracce archi
+    traces = [] # Lista per tutte le tracce (archi e nodi)
     stringa_anchor_lower = stringa_anchor_da_evidenziare.lower().strip() if abilita_evidenziazione_anchor_arco and stringa_anchor_da_evidenziare else ""
     
-    # Dizionari per raggruppare gli archi per colore/traccia
-    edges_by_color_group = {
-        'anchor_highlight': {'x': [], 'y': [], 'z': [], 'text': [], 'color': colore_evidenziazione_anchor_arco, 'name': 'Archi Evidenziati (Anchor)'},
-        'status_2xx': {'x': [], 'y': [], 'z': [], 'text': [], 'color': colori_status_code.get('2xx', '#2ca02c'), 'name': 'Archi 2xx (Successo)'},
-        'status_301': {'x': [], 'y': [], 'z': [], 'text': [], 'color': colori_status_code.get('301', '#1f77b4'), 'name': 'Archi 301 (Redirect Perm.)'},
-        'status_30x': {'x': [], 'y': [], 'z': [], 'text': [], 'color': colori_status_code.get('30x', '#aec7e8'), 'name': 'Archi 30x (Altri Redirect)'},
-        'status_404': {'x': [], 'y': [], 'z': [], 'text': [], 'color': colori_status_code.get('404', '#ff7f0e'), 'name': 'Archi 404 (Non Trovato)'},
-        'status_4xx': {'x': [], 'y': [], 'z': [], 'text': [], 'color': colori_status_code.get('4xx', '#d62728'), 'name': 'Archi 4xx (Altri Errori Client)'},
-        'status_5xx': {'x': [], 'y': [], 'z': [], 'text': [], 'color': colori_status_code.get('5xx', '#7f7f7f'), 'name': 'Archi 5xx (Errori Server)'},
-        'status_unknown': {'x': [], 'y': [], 'z': [], 'text': [], 'color': colori_status_code.get('Sconosciuto', '#c7c7c7'), 'name': 'Archi (Status Sconosciuto)'},
-        'default': {'x': [], 'y': [], 'z': [], 'text': [], 'color': '#888888', 'name': 'Archi (Default)'} # Fallback se la colorazione status non è attiva
+    # Raggruppa archi per la visualizzazione
+    # 1. Archi evidenziati per anchor (hanno la precedenza)
+    # 2. Archi colorati per status code (se abilitato e status code selezionato per colorazione)
+    # 3. Archi di default (tutti gli altri)
+    
+    edges_data_groups = {
+        'anchor_highlight': {'x':[], 'y':[], 'z':[], 'text':[], 'color': colore_evidenziazione_anchor_arco, 'name': 'Archi Evidenziati (Anchor)'}
     }
+    # Aggiungi dinamicamente gruppi per status code personalizzati
+    if abilita_colorazione_status_arco and map_status_code_a_colore:
+        for status_val, color_val in map_status_code_a_colore.items():
+            edges_data_groups[f'status_{status_val}'] = {'x':[], 'y':[], 'z':[], 'text':[], 'color': color_val, 'name': f'Archi Status {status_val}'}
+    
+    edges_data_groups['default'] = {'x':[], 'y':[], 'z':[], 'text':[], 'color': '#888888', 'name': 'Archi (Altri)'}
+
 
     for u, v, data in G.edges(data=True):
         if u not in pos or v not in pos: continue
@@ -230,39 +215,41 @@ def crea_grafo_link_interni_streamlit(
         if anchors:
             display_anchors = anchors[:7]
             hover_text_content = "<br>".join(f"- {str(a)}" for a in display_anchors)
-            if len(anchors) > 7: hover_text_content += f"<br>... e altri {len(anchors) - 7} anchor(s)"
-            elif not any(a for a in anchors if a != "Vuoto") and "Vuoto" in anchors: hover_text_content = "- Vuoto"
+            if len(anchors) > 7: hover_text_content += f"<br>... e altri {len(anchors) - 7}"
+            elif not any(a for a in anchors if a != "Vuoto") and "Vuoto" in anchors : hover_text_content = "- Vuoto"
         full_hover_text = f"<b>Link</b><br>Da: {u}<br>A: {v}<br>Status: {status_code_str}<br>--- Anchor Texts ---<br>{hover_text_content}"
 
-        edge_group_key = 'default' # Default se nessun'altra condizione matcha
+        target_group_key = 'default'
         is_anchor_highlighted = False
 
         if abilita_evidenziazione_anchor_arco and stringa_anchor_lower:
             for anchor in anchors:
                 if stringa_anchor_lower in str(anchor).lower():
-                    edge_group_key = 'anchor_highlight'
+                    target_group_key = 'anchor_highlight'
                     is_anchor_highlighted = True
                     break
         
-        if not is_anchor_highlighted and abilita_colorazione_status_arco:
-            if status_code_str.startswith('2'): edge_group_key = 'status_2xx'
-            elif status_code_str == '301': edge_group_key = 'status_301'
-            elif status_code_str.startswith('3'): edge_group_key = 'status_30x'
-            elif status_code_str == '404': edge_group_key = 'status_404'
-            elif status_code_str.startswith('4'): edge_group_key = 'status_4xx'
-            elif status_code_str.startswith('5'): edge_group_key = 'status_5xx'
-            else: edge_group_key = 'status_unknown'
-        
-        group = edges_by_color_group[edge_group_key]
+        if not is_anchor_highlighted and abilita_colorazione_status_arco and map_status_code_a_colore:
+            if status_code_str in map_status_code_a_colore:
+                target_group_key = f'status_{status_code_str}'
+            # Se lo status non è tra quelli personalizzati, ma la colorazione status è attiva,
+            # potrebbe andare in un gruppo 'status_unknown' o 'default' a seconda di come è definito map_status_code_a_colore
+            elif 'Sconosciuto' in map_status_code_a_colore and status_code_str == "Sconosciuto": # Gestisci Sconosciuto se personalizzato
+                 target_group_key = 'status_Sconosciuto'
+
+
+        group = edges_data_groups.get(target_group_key)
+        if not group: # Fallback se la chiave non esiste per qualche motivo (es. status non in mappa colori)
+            group = edges_data_groups['default']
+            
         group['x'].extend([pos_u[0], pos_v[0], None])
         group['y'].extend([pos_u[1], pos_v[1], None])
         if layout_3d: group['z'].extend([pos_u[2], pos_v[2], None])
         group['text'].extend([full_hover_text, full_hover_text, None])
 
-    traces = []
-    for key, group_data in edges_by_color_group.items():
+    for key, group_data in edges_data_groups.items():
         if group_data['x']: # Solo se ci sono archi in questo gruppo
-            line_width = 1.5 if key == 'anchor_highlight' else 0.7
+            line_width = 1.5 if key == 'anchor_highlight' else 0.9 # Leggermente più spesso per anchor, sottile per status
             opacity_val = 0.9 if key == 'anchor_highlight' else 0.7
             trace_args = dict(line=dict(width=line_width, color=group_data['color']), 
                               mode='lines', hoverinfo='text', text=group_data['text'], 
@@ -271,7 +258,7 @@ def crea_grafo_link_interni_streamlit(
             else: traces.append(go.Scatter(x=group_data['x'], y=group_data['y'], **trace_args))
 
 
-    # Nodi (logica di colorazione URL e per categoria)
+    # Nodi
     node_degrees = dict(G.degree())
     node_values = list(node_degrees.values()) if node_degrees else []
     default_node_colors_by_category = {'Basso Grado': 'blue', 'Medio Grado': 'orange', 'Alto Grado': 'red'}
@@ -324,14 +311,16 @@ def crea_grafo_link_interni_streamlit(
     title_font_properties = dict(size=18)
     title_alignment_properties = dict(x=0.5)
 
+    title_text = '<b>Grafo Link Interni (3D)</b>' if layout_3d else '<b>Grafo Link Interni (2D)</b>'
+
     if layout_3d: 
         fig_layout = go.Layout(
-            title=dict(text='<b>Grafo Link Interni (3D) con Anchor Text</b>', font=title_font_properties, **title_alignment_properties),
+            title=dict(text=title_text, font=title_font_properties, **title_alignment_properties),
             scene=dict(bgcolor="rgba(240,240,240,0.95)"), **common_layout_properties
         )
     else: 
         fig_layout = go.Layout(
-            title=dict(text='<b>Grafo Link Interni (2D) con Anchor Text</b>', font=title_font_properties, **title_alignment_properties), 
+            title=dict(text=title_text, font=title_font_properties, **title_alignment_properties), 
             plot_bgcolor='rgba(245,245,245,1)', **common_layout_properties
         )
     
@@ -365,7 +354,7 @@ pattern, pagine isolate, e molto altro.
 3.  **🎨 Evidenziazione Personalizzata**:
     * Colora i **nodi** (pagine) la cui URL contiene una stringa a tua scelta.
     * Colora gli **archi** (link) il cui anchor text contiene una stringa a tua scelta.
-    * Colora gli **archi** in base al loro Status Code.
+    * Colora gli **archi** in base al loro Status Code, selezionando quali status code personalizzare e scegliendo i colori.
 4.  **🔎 Esplora il Grafo**: Il grafo verrà visualizzato nell'area principale.
     * Interagisci zoomando, spostandoti e ruotando (se in 3D).
     * Passa il mouse sopra nodi e archi per visualizzare dettagli.
@@ -381,6 +370,23 @@ log_placeholder_container = st.empty()
 with st.sidebar: 
     st.header("🛠️ Opzioni di Filtro e Controllo") 
     uploaded_file = st.file_uploader("📤 Carica il tuo file CSV dei link", type=["csv"]) 
+
+    # Prepara la lista di status code unici DOPO il caricamento del file
+    unique_status_codes_from_file = []
+    df_temp_for_status_codes = None
+    if uploaded_file is not None:
+        try:
+            # Leggi solo la colonna degli status code per efficienza, se esiste
+            # Dobbiamo leggere l'intero file per passarlo alla funzione principale comunque
+            temp_df_status = pd.read_csv(io.BytesIO(uploaded_file.getvalue()), dtype=str, usecols=lambda x: x in ['Status Code', st.session_state.get('status_code_column_name_input', 'Status Code')])
+            status_col_name_to_check = st.session_state.get('status_code_column_name_input', 'Status Code')
+            if status_col_name_to_check in temp_df_status.columns:
+                unique_status_codes_from_file = sorted(list(temp_df_status[status_col_name_to_check].dropna().astype(str).str.strip().unique()))
+        except Exception as e:
+            st.warning(f"Impossibile leggere gli status code dal file: {e}")
+            unique_status_codes_from_file = [] # Fallback a lista vuota
+        uploaded_file.seek(0) # Resetta il puntatore del file per la lettura successiva
+
 
     default_stringhe_da_escludere = [     
         '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', 
@@ -455,17 +461,30 @@ with st.sidebar:
     st.markdown("---")
     st.subheader("🚦 Evidenziazione Archi per Status Code")
     abilita_colorazione_status_ui = st.checkbox("Abilita colorazione archi per Status Code", value=True, key="enable_status_code_coloring")
-    colonna_status_code_input = st.text_input("Nome colonna Status Code nel CSV:", value="Status Code", key="status_code_column_name")
+    colonna_status_code_input = st.text_input("Nome colonna Status Code nel CSV:", value="Status Code", key="status_code_column_name_input")
     
-    colori_status_code_ui = {}
+    map_status_a_colore_ui = {}
+    default_colors_for_status = {
+        '2xx': '#2ca02c', '301': '#1f77b4', '30x': '#aec7e8',
+        '404': '#ff7f0e', '4xx': '#d62728', '5xx': '#7f7f7f',
+        'Sconosciuto': '#c7c7c7'
+    }
+
     if abilita_colorazione_status_ui:
-        colori_status_code_ui['2xx'] = st.color_picker("Colore Archi 2xx (Successo):", "#2ca02c", key="color_status_2xx")
-        colori_status_code_ui['301'] = st.color_picker("Colore Archi 301 (Redirect Perm.):", "#1f77b4", key="color_status_301")
-        colori_status_code_ui['30x'] = st.color_picker("Colore Archi 30x (Altri Redirect):", "#aec7e8", key="color_status_30x")
-        colori_status_code_ui['404'] = st.color_picker("Colore Archi 404 (Non Trovato):", "#ff7f0e", key="color_status_404")
-        colori_status_code_ui['4xx'] = st.color_picker("Colore Archi 4xx (Altri Errori Client):", "#d62728", key="color_status_4xx")
-        colori_status_code_ui['5xx'] = st.color_picker("Colore Archi 5xx (Errori Server):", "#7f7f7f", key="color_status_5xx")
-        colori_status_code_ui['Sconosciuto'] = st.color_picker("Colore Archi (Status Sconosciuto/Altro):", "#c7c7c7", key="color_status_unknown")
+        if uploaded_file and unique_status_codes_from_file:
+            st.write("Seleziona gli Status Code da colorare e personalizza il colore:")
+            status_codes_selezionati_per_colore = st.multiselect(
+                "Status Code da personalizzare:",
+                options=unique_status_codes_from_file,
+                key="status_codes_to_color_multiselect"
+            )
+            for sc in status_codes_selezionati_per_colore:
+                default_color = default_colors_for_status.get(sc, default_colors_for_status.get(sc[0]+'xx' if sc else 'Sconosciuto', default_colors_for_status['Sconosciuto']))
+                map_status_a_colore_ui[sc] = st.color_picker(f"Colore per Status '{sc}':", value=default_color, key=f"color_sc_{sc}")
+        elif uploaded_file and not unique_status_codes_from_file:
+            st.warning(f"Nessun Status Code univoco trovato nella colonna '{colonna_status_code_input}' del file caricato, o la colonna è mancante.")
+        else:
+            st.info("Carica un file CSV per vedere e personalizzare i colori per Status Code.")
 
 
     st.markdown("---")
@@ -474,6 +493,7 @@ with st.sidebar:
 
 if uploaded_file is not None:
     try:
+        # Rileggi il file per l'elaborazione principale, dato che uploaded_file.seek(0) è stato fatto.
         df_caricato = pd.read_csv(uploaded_file, dtype=str)
         st.success(f"✔️ File '{uploaded_file.name}' caricato con successo. ({len(df_caricato)} righe)") 
 
@@ -492,9 +512,9 @@ if uploaded_file is not None:
                 abilita_evidenziazione_anchor_arco=abilita_evidenziazione_anchor_ui, 
                 stringa_anchor_da_evidenziare=stringa_da_cercare_anchor_ui,       
                 colore_evidenziazione_anchor_arco=colore_scelto_anchor_ui,
-                abilita_colorazione_status_arco=abilita_colorazione_status_ui, # Passa nuovo parametro
-                colonna_status_code_nome=colonna_status_code_input,         # Passa nuovo parametro
-                colori_status_code=colori_status_code_ui                   # Passa nuovo parametro
+                abilita_colorazione_status_arco=abilita_colorazione_status_ui, 
+                colonna_status_code_nome=colonna_status_code_input,         
+                colori_status_code=map_status_a_colore_ui # Passa la mappa dei colori personalizzati                 
             )
         
         with log_placeholder_container.expander("📜 Log di Pre-processing", expanded=False): 
@@ -512,20 +532,19 @@ if uploaded_file is not None:
                         mime="text/csv"
                     )
             except FileNotFoundError:
-                st.warning("⚠️ File report nodi ('report_nodi_grafo_streamlit.csv') non trovato. Potrebbe non essere stato ancora generato o c'è stato un errore.") 
+                st.warning("⚠️ File report nodi ('report_nodi_grafo_streamlit.csv') non trovato.") 
             except Exception as e_dl:
-                 st.warning(f"😥 Errore nel preparare il download del report nodi: {e_dl}") 
+                 st.warning(f"😥 Errore nel preparare il download: {e_dl}") 
         else:
             if not log_output: 
-                 st.warning("🚫 Impossibile generare il grafico con i filtri correnti o a causa di un errore non specificato nei log.") 
-
+                 st.warning("🚫 Impossibile generare il grafico.") 
 
     except Exception as e:
-        st.error(f"🆘 Errore critico durante l'elaborazione del file o la generazione del grafo: {e}") 
+        st.error(f"🆘 Errore critico: {e}") 
         st.exception(e) 
 else:
     with log_placeholder_container.container(): 
-        st.info("⏳ Attendo il caricamento di un file CSV per visualizzare il grafo e i log.") 
+        st.info("⏳ Attendo il caricamento di un file CSV.") 
 
 st.markdown("---") 
 st.markdown(
