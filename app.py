@@ -177,7 +177,7 @@ def crea_grafo_link_interni_streamlit(
     log_messages.append("Calcolo layout...")
     pos = None; layout_3d = False
     node_count = G.number_of_nodes()
-    if 0 < node_count < 1500:
+    if 0 < node_count < 100000:
         try: 
             k_val = (0.5/np.sqrt(node_count) if node_count >0 else 0.5)
             pos = nx.spring_layout(G, dim=3, k=k_val, iterations=50, seed=42, scale=3)
