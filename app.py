@@ -23,7 +23,7 @@ def crea_grafo_link_interni_streamlit(
     colore_evidenziazione_anchor_arco="#800080",
     abilita_colorazione_status_arco=False, 
     colonna_status_code_nome="Status Code", 
-    map_status_code_a_colore=None # Nuovo: dizionario {status_code_str: colore_hex}
+    map_status_code_a_colore=None 
 ):
     """
     Genera una rappresentazione a grafo navigabile dei link interni da un DataFrame,
@@ -39,7 +39,6 @@ def crea_grafo_link_interni_streamlit(
     col_anchor = colonna_anchor_text
     col_status = colonna_status_code_nome
     
-    # ... (Controlli colonne e pre-processing iniziale identici alla versione precedente) ...
     cols_base_req = [col_source, col_dest]
     for col in cols_base_req:
         if col not in df.columns:
@@ -129,15 +128,13 @@ def crea_grafo_link_interni_streamlit(
 
     if agg_dict:
         df_agg = df.groupby([col_source, col_dest]).agg(**agg_dict).reset_index()
-    else: # Nessuna colonna opzionale da aggregare
+    else: 
         df_agg = df[[col_source, col_dest]].drop_duplicates().reset_index(drop=True)
 
-    # Assicura che le colonne esistano anche se non aggregate
     if 'Unique_Anchors' not in df_agg.columns:
         df_agg['Unique_Anchors'] = [["Vuoto"] for _ in range(len(df_agg))]
     if 'Rep_Status_Code' not in df_agg.columns:
         df_agg['Rep_Status_Code'] = "Sconosciuto"
-
 
     if df_agg.empty: log_messages.append("DataFrame aggregato vuoto."); return None, log_messages
     log_messages.append(f"Archi unici per grafo: {len(df_agg)}")
@@ -160,8 +157,7 @@ def crea_grafo_link_interni_streamlit(
 
     log_messages.append("Calcolo layout...")
     pos = None; layout_3d = False; node_count = G.number_of_nodes()
-    # Aumentata soglia per layout 3D
-    if 0 < node_count < 100000: # Soglia aumentata
+    if 0 < node_count < 100000: 
         try: 
             k_val = (0.5/np.sqrt(node_count) if node_count >0 else 0.5)
             pos = nx.spring_layout(G, dim=3, k=k_val, iterations=50, seed=42, scale=3)
@@ -185,8 +181,7 @@ def crea_grafo_link_interni_streamlit(
 
     log_messages.append("Preparazione visualizzazione Plotly...")
     
-    # Preparazione dati per tracce archi
-    traces = [] # Lista per tutte le tracce (archi e nodi)
+    traces = [] 
     stringa_anchor_lower = stringa_anchor_da_evidenziare.lower().strip() if abilita_evidenziazione_anchor_arco and stringa_anchor_da_evidenziare else ""
     
     edges_data_groups = {
@@ -194,10 +189,11 @@ def crea_grafo_link_interni_streamlit(
     }
     if abilita_colorazione_status_arco and map_status_code_a_colore:
         for status_val, color_val in map_status_code_a_colore.items():
+            # Solo se l'utente ha effettivamente selezionato questo status code per la colorazione
+            # (map_status_code_a_colore conterrà solo quelli attivati e con un colore)
             edges_data_groups[f'status_{status_val}'] = {'x':[], 'y':[], 'z':[], 'text':[], 'color': color_val, 'name': f'Archi Status {status_val}'}
     
     edges_data_groups['default'] = {'x':[], 'y':[], 'z':[], 'text':[], 'color': '#888888', 'name': 'Archi (Altri)'}
-
 
     for u, v, data in G.edges(data=True):
         if u not in pos or v not in pos: continue
@@ -224,15 +220,13 @@ def crea_grafo_link_interni_streamlit(
                     break
         
         if not is_anchor_highlighted and abilita_colorazione_status_arco and map_status_code_a_colore:
-            if status_code_str in map_status_code_a_colore: # Verifica se lo status code esatto è nella mappa dei colori personalizzati
+            # Se lo status code esatto è nella mappa dei colori personalizzati dall'utente
+            if status_code_str in map_status_code_a_colore: 
                 target_group_key = f'status_{status_code_str}'
-            # Se non c'è una corrispondenza esatta, non assegnare a un gruppo di status code specifico a meno che non sia 'Sconosciuto' e sia personalizzato
-            elif 'Sconosciuto' in map_status_code_a_colore and status_code_str == "Sconosciuto":
-                 target_group_key = 'status_Sconosciuto'
-            # Altrimenti, rimarrà 'default'
+            # Altrimenti, rimane 'default' (non applichiamo colori di default per status non selezionati)
 
         group = edges_data_groups.get(target_group_key)
-        if not group: 
+        if not group: # Fallback di sicurezza, dovrebbe sempre trovare 'default'
             group = edges_data_groups['default']
             
         group['x'].extend([pos_u[0], pos_v[0], None])
@@ -362,41 +356,31 @@ with st.sidebar:
     st.header("🛠️ Opzioni di Filtro e Controllo") 
     uploaded_file = st.file_uploader("📤 Carica il tuo file CSV dei link", type=["csv"]) 
 
-    # Prepara la lista di status code unici DOPO il caricamento del file
     unique_status_codes_from_file = []
-    # df_temp_for_status_codes = None # Non necessario
+    if 'status_code_column_name_input' not in st.session_state: # Inizializza se non esiste
+        st.session_state.status_code_column_name_input = "Status Code"
+
     if uploaded_file is not None:
         try:
-            # Leggi solo la colonna degli status code per efficienza, se esiste
-            # Dobbiamo leggere l'intero file per passarlo alla funzione principale comunque
-            # Per ottenere gli status code, è meglio leggere l'intero file una volta e passarlo
-            # o leggere solo la colonna status code qui. Per ora, leggiamo solo la colonna.
-            # Questo significa che uploaded_file verrà letto due volte se questa sezione è prima del processamento principale.
-            # Potrebbe essere ottimizzato passandolo o leggendolo una sola volta.
+            file_buffer_copy = io.BytesIO(uploaded_file.getvalue()) # Crea una copia per la lettura
+            # Leggi solo le colonne necessarie per gli status code, se possibile
+            # Per ora leggiamo tutto per semplicità, ma potrebbe essere ottimizzato
+            temp_df_status = pd.read_csv(file_buffer_copy, dtype=str, usecols=lambda x: x in [st.session_state.status_code_column_name_input])
             
-            # Per evitare di leggere due volte il file caricato, potremmo spostare questa logica
-            # all'interno del blocco if uploaded_file is not None: principale,
-            # ma per ora lo lasciamo qui per semplicità della UI.
-            # L'utente potrebbe dover ricaricare o l'app potrebbe rieseguire per vedere gli status code aggiornati.
-            
-            # Soluzione temporanea per leggere gli status codes:
-            # Crea una copia del buffer per non consumarlo
-            file_buffer_copy = io.BytesIO(uploaded_file.getvalue())
-            temp_df_status = pd.read_csv(file_buffer_copy, dtype=str) # Leggi tutto per ora
-            
-            status_col_name_to_check = st.session_state.get('status_code_column_name_input', 'Status Code') # Usa lo stato della sessione se disponibile
-            if status_col_name_to_check in temp_df_status.columns:
-                unique_status_codes_from_file = sorted(list(temp_df_status[status_col_name_to_check].dropna().astype(str).str.strip().unique()))
+            if st.session_state.status_code_column_name_input in temp_df_status.columns:
+                unique_status_codes_from_file = sorted(list(temp_df_status[st.session_state.status_code_column_name_input].dropna().astype(str).str.strip().unique()))
+                if not unique_status_codes_from_file:
+                     st.sidebar.caption(f"Nessun valore trovato nella colonna '{st.session_state.status_code_column_name_input}'.")
             else:
-                # Stampa un avviso se la colonna non è trovata, ma solo se l'utente ha specificato un nome diverso da quello di default
-                # O se il nome di default non è presente.
-                if status_col_name_to_check != 'Status Code' or 'Status Code' not in temp_df_status.columns:
-                     st.sidebar.warning(f"Colonna Status Code '{status_col_name_to_check}' non trovata nel file caricato.")
-
+                 st.sidebar.warning(f"Colonna Status Code '{st.session_state.status_code_column_name_input}' non trovata.")
+            uploaded_file.seek(0) # Importante resettare per la lettura principale
+        except pd.errors.EmptyDataError:
+            st.sidebar.warning("File CSV caricato è vuoto o malformattato.")
+        except ValueError as ve: # Errore se usecols non trova la colonna
+            st.sidebar.warning(f"Colonna '{st.session_state.status_code_column_name_input}' non presente nel CSV per gli status code.")
         except Exception as e:
-            st.sidebar.warning(f"Impossibile leggere gli status code dal file: {e}")
+            st.sidebar.error(f"Errore lettura status codes: {e}")
             unique_status_codes_from_file = [] 
-        # Non è necessario fare uploaded_file.seek(0) qui perché lo faremo prima della lettura principale
 
 
     default_stringhe_da_escludere = [     
@@ -427,13 +411,13 @@ with st.sidebar:
 
     stringhe_escluse_selezionate_ui = []
     num_columns = 3
-    cols = st.columns(num_columns)
+    cols_checkbox = st.columns(num_columns) # Rinomina per evitare conflitto
     for idx, s_escl in enumerate(default_stringhe_da_escludere):
         checkbox_key = f"cb_{s_escl.replace('.', '_dot_').replace('/', '_slash_').replace(':', '_colon_').replace('#','_hash_')}"
         if checkbox_key not in st.session_state.checkbox_states:
             st.session_state.checkbox_states[checkbox_key] = True 
         display_label_cb = r"\#" if s_escl == "#" else s_escl
-        with cols[idx % num_columns]: 
+        with cols_checkbox[idx % num_columns]: 
             is_checked = st.checkbox(
                 display_label_cb, 
                 value=st.session_state.checkbox_states[checkbox_key], 
@@ -473,65 +457,82 @@ with st.sidebar:
     st.subheader("🚦 Evidenziazione Archi per Status Code")
     abilita_colorazione_status_ui = st.checkbox("Abilita colorazione archi per Status Code", value=True, key="enable_status_code_coloring")
     colonna_status_code_input = st.text_input("Nome colonna Status Code nel CSV:", value="Status Code", key="status_code_column_name_input")
-    st.session_state.status_code_column_name_input = colonna_status_code_input # Salva per rilettura status codes
+    # Salva il nome della colonna in session_state per rileggere gli status codes se il file cambia
+    st.session_state.status_code_column_name_input = colonna_status_code_input 
     
     map_status_a_colore_ui = {}
-    default_colors_for_status_map = { # Mappa più dettagliata per default
-        '200': '#2ca02c', # Verde successo
-        '301': '#1f77b4', # Blu scuro per redirect permanente
-        '302': '#aec7e8', # Azzurro per redirect temporaneo
-        '307': '#aec7e8', # Azzurro per redirect temporaneo
-        '308': '#1f77b4', # Blu scuro per redirect permanente (nuovo standard)
-        '404': '#ff7f0e', # Arancione per non trovato
-        '403': '#d62728', # Rosso scuro per proibito
-        '410': '#8c564b', # Marrone per Gone
-        '500': '#7f7f7f', # Grigio scuro per errore server generico
-        '503': '#e377c2', # Rosa per servizio non disponibile
-        # Categorie generiche come fallback
+    default_colors_for_status_map = { 
+        '200': '#2ca02c', '301': '#1f77b4', '302': '#aec7e8',
+        '307': '#aec7e8', '308': '#1f77b4', '404': '#ff7f0e',
+        '403': '#d62728', '410': '#8c564b', '500': '#7f7f7f',
+        '503': '#e377c2', 
         '2xx': '#2ca02c', '3xx': '#17becf', 
         '4xx': '#d62728', '5xx': '#7f7f7f',
-        'Sconosciuto': '#c7c7c7' # Grigio chiaro per sconosciuto/altro
+        'Sconosciuto': '#c7c7c7' 
     }
 
     if abilita_colorazione_status_ui:
         if uploaded_file and unique_status_codes_from_file:
-            st.write("Seleziona gli Status Code da colorare e personalizza il colore:")
-            # Se unique_status_codes_from_file è vuota, il multiselect non mostrerà opzioni
-            status_codes_selezionati_per_colore = st.multiselect(
-                "Status Code da personalizzare (seleziona dalla lista):",
-                options=unique_status_codes_from_file,
-                default=[sc for sc in ['200', '301', '404', '500', 'Sconosciuto'] if sc in unique_status_codes_from_file], # Preseleziona alcuni comuni se presenti
-                key="status_codes_to_color_multiselect"
-            )
-            for sc_val in status_codes_selezionati_per_colore:
-                # Trova un colore di default sensato
-                default_color = default_colors_for_status_map.get(sc_val)
-                if not default_color: # Fallback se lo status code esatto non è nella mappa
-                    if sc_val.startswith('2'): default_color = default_colors_for_status_map['2xx']
-                    elif sc_val.startswith('3'): default_color = default_colors_for_status_map['3xx']
-                    elif sc_val.startswith('4'): default_color = default_colors_for_status_map['4xx']
-                    elif sc_val.startswith('5'): default_color = default_colors_for_status_map['5xx']
-                    else: default_color = default_colors_for_status_map['Sconosciuto']
+            st.write("Seleziona e personalizza i colori per gli Status Code:")
+            
+            # Inizializza lo stato delle checkbox per gli status code se non esiste
+            if 'status_checkbox_states' not in st.session_state:
+                st.session_state.status_checkbox_states = {}
+            
+            num_status_cols = 2 # Colonne per i checkbox degli status code
+            status_cols = st.columns(num_status_cols)
+            col_idx = 0
+
+            for sc_val in unique_status_codes_from_file:
+                status_checkbox_key = f"cb_status_{sc_val.replace('.', '_').replace('/','_')}" # Chiave univoca
                 
-                map_status_a_colore_ui[sc_val] = st.color_picker(f"Colore per Status '{sc_val}':", value=default_color, key=f"color_sc_{sc_val.replace('.', '_')}")
+                # Inizializza lo stato per questo specifico status code se non esiste
+                # Pre-seleziona alcuni status comuni se presenti nel file
+                common_codes_to_default_check = ['200', '301', '302', '404', '500', '503']
+                if status_checkbox_key not in st.session_state.status_checkbox_states:
+                    st.session_state.status_checkbox_states[status_checkbox_key] = sc_val in common_codes_to_default_check
+                
+                with status_cols[col_idx % num_status_cols]:
+                    enable_color_for_sc = st.checkbox(
+                        f"Colora Status '{sc_val}'", 
+                        value=st.session_state.status_checkbox_states[status_checkbox_key],
+                        key=status_checkbox_key
+                    )
+                st.session_state.status_checkbox_states[status_checkbox_key] = enable_color_for_sc
+
+                if enable_color_for_sc:
+                    default_color = default_colors_for_status_map.get(sc_val)
+                    if not default_color: 
+                        if sc_val.startswith('2'): default_color = default_colors_for_status_map['2xx']
+                        elif sc_val.startswith('3'): default_color = default_colors_for_status_map['3xx']
+                        elif sc_val.startswith('4'): default_color = default_colors_for_status_map['4xx']
+                        elif sc_val.startswith('5'): default_color = default_colors_for_status_map['5xx']
+                        else: default_color = default_colors_for_status_map['Sconosciuto']
+                    
+                    with status_cols[col_idx % num_status_cols]: # Metti il color picker nella stessa colonna
+                        map_status_a_colore_ui[sc_val] = st.color_picker(
+                            f"Colore per '{sc_val}':", 
+                            value=default_color, 
+                            key=f"color_picker_sc_{sc_val.replace('.', '_').replace('/','_')}"
+                        )
+                col_idx +=1
         elif uploaded_file and not unique_status_codes_from_file:
-            st.warning(f"Nessun Status Code univoco trovato nella colonna '{colonna_status_code_input}' del file caricato, o la colonna è mancante/vuota.")
+            st.warning(f"Nessun Status Code univoco trovato nella colonna '{colonna_status_code_input}'.")
         elif not uploaded_file:
-             st.info("Carica un file CSV per vedere e personalizzare i colori per Status Code.")
+             st.info("Carica un file CSV per personalizzare i colori per Status Code.")
 
 
     st.markdown("---")
-    st.info("ℹ️ Modifica i filtri e il grafico si aggiornerà automaticamente al caricamento di un nuovo file o al cambio di un'opzione (se il file è già caricato).") 
+    st.info("ℹ️ Modifica i filtri e il grafico si aggiornerà automaticamente.") 
 
 
 if uploaded_file is not None:
     try:
-        # Assicurati che il puntatore del file sia all'inizio per la lettura principale
-        uploaded_file.seek(0)
+        uploaded_file.seek(0) # Assicura che il file sia letto dall'inizio
         df_caricato = pd.read_csv(uploaded_file, dtype=str)
-        st.success(f"✔️ File '{uploaded_file.name}' caricato con successo. ({len(df_caricato)} righe)") 
+        st.success(f"✔️ File '{uploaded_file.name}' caricato. ({len(df_caricato)} righe)") 
 
-        with st.spinner("⏳ Generazione del grafo in corso... Questo potrebbe richiedere alcuni istanti."): 
+        with st.spinner("⏳ Generazione del grafo..."): 
             figura_plotly, log_output = crea_grafo_link_interni_streamlit(
                 df_input=df_caricato,
                 stringhe_url_da_escludere_selezionate=stringhe_escluse_selezionate_ui, 
@@ -548,7 +549,7 @@ if uploaded_file is not None:
                 colore_evidenziazione_anchor_arco=colore_scelto_anchor_ui,
                 abilita_colorazione_status_arco=abilita_colorazione_status_ui, 
                 colonna_status_code_nome=colonna_status_code_input,         
-                map_status_code_a_colore=map_status_a_colore_ui # Passa la mappa dei colori personalizzati                 
+                map_status_code_a_colore=map_status_a_colore_ui                
             )
         
         with log_placeholder_container.expander("📜 Log di Pre-processing", expanded=False): 
@@ -556,7 +557,7 @@ if uploaded_file is not None:
 
         if figura_plotly:
             st.plotly_chart(figura_plotly, use_container_width=True, height=800)
-            st.caption("🖱️ Interagisci con il grafo: zoom, pan, rotazione (3D), hover per dettagli.") 
+            st.caption("🖱️ Interagisci con il grafo.") 
             try:
                 with open("report_nodi_grafo_streamlit.csv", "rb") as fp:
                     st.download_button(
@@ -566,12 +567,12 @@ if uploaded_file is not None:
                         mime="text/csv"
                     )
             except FileNotFoundError:
-                st.warning("⚠️ File report nodi ('report_nodi_grafo_streamlit.csv') non trovato.") 
+                st.warning("⚠️ File report nodi non trovato.") 
             except Exception as e_dl:
-                 st.warning(f"😥 Errore nel preparare il download: {e_dl}") 
+                 st.warning(f"😥 Errore download report: {e_dl}") 
         else:
             if not log_output or "Grafo vuoto" not in "".join(log_output) and "DataFrame vuoto" not in "".join(log_output) : 
-                 st.warning("🚫 Impossibile generare il grafico. Controlla i log per dettagli.") 
+                 st.warning("🚫 Impossibile generare il grafico. Controlla i log.") 
 
     except Exception as e:
         st.error(f"🆘 Errore critico: {e}") 
