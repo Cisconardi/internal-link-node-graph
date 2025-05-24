@@ -189,8 +189,6 @@ def crea_grafo_link_interni_streamlit(
     }
     if abilita_colorazione_status_arco and map_status_code_a_colore:
         for status_val, color_val in map_status_code_a_colore.items():
-            # Solo se l'utente ha effettivamente selezionato questo status code per la colorazione
-            # (map_status_code_a_colore conterrà solo quelli attivati e con un colore)
             edges_data_groups[f'status_{status_val}'] = {'x':[], 'y':[], 'z':[], 'text':[], 'color': color_val, 'name': f'Archi Status {status_val}'}
     
     edges_data_groups['default'] = {'x':[], 'y':[], 'z':[], 'text':[], 'color': '#888888', 'name': 'Archi (Altri)'}
@@ -220,13 +218,13 @@ def crea_grafo_link_interni_streamlit(
                     break
         
         if not is_anchor_highlighted and abilita_colorazione_status_arco and map_status_code_a_colore:
-            # Se lo status code esatto è nella mappa dei colori personalizzati dall'utente
             if status_code_str in map_status_code_a_colore: 
                 target_group_key = f'status_{status_code_str}'
-            # Altrimenti, rimane 'default' (non applichiamo colori di default per status non selezionati)
+            elif 'Sconosciuto' in map_status_code_a_colore and status_code_str == "Sconosciuto":
+                 target_group_key = 'status_Sconosciuto'
 
         group = edges_data_groups.get(target_group_key)
-        if not group: # Fallback di sicurezza, dovrebbe sempre trovare 'default'
+        if not group: 
             group = edges_data_groups['default']
             
         group['x'].extend([pos_u[0], pos_v[0], None])
@@ -319,69 +317,91 @@ st.set_page_config(layout="wide", page_title="Visualizzatore Grafo Link Interni"
 
 st.title("🌐 Visualizzatore Interattivo Grafo Link Interni 🔗")
 
-st.markdown("""
-Benvenuto! Questa applicazione ti aiuta a esplorare la struttura dei link interni del tuo sito web. 
-Visualizza le connessioni tra le pagine come un grafo interattivo, permettendoti di identificare 
-pattern, pagine isolate, e molto altro.
+with st.expander("Come funziona questa App? 🗺️ (Clicca per espandere)", expanded=True):
+    st.markdown("""
+    Benvenuto! Questa applicazione ti aiuta a esplorare la struttura dei link interni del tuo sito web. 
+    Visualizza le connessioni tra le pagine come un grafo interattivo, permettendoti di identificare 
+    pattern, pagine isolate, e molto altro.
 
-**Come funziona?** 🗺️
+    **Passaggi per l'utilizzo:**
 
-1.  **⬆️ Carica il tuo File**: Utilizza la sidebar per caricare un file CSV contenente i dati dei link.
-    * **Colonne Richieste**: `Source` (URL di origine), `Destination` (URL di destinazione).
-    * **Colonne Opzionali**: 
-        * `Anchor` (il testo dell'anchor text del link).
-        * `Type` (il tipo di link, es. "Hyperlink", "HTTP Redirect").
-        * `Status Code` (il codice di stato HTTP del link di destinazione).
-2.  **⚙️ Personalizza i Filtri**: Nella sidebar, puoi:
-    * Definire un **dominio specifico** da includere (per concentrarti sui link interni).
-    * Filtrare per **tipo di record** (es. visualizzare solo "Hyperlink").
-    * **Escludere URL** che contengono stringhe specifiche (es. `.css`, `.jpg`) tramite checkbox o inserendo valori personalizzati.
-3.  **🎨 Evidenziazione Personalizzata**:
-    * Colora i **nodi** (pagine) la cui URL contiene una stringa a tua scelta.
-    * Colora gli **archi** (link) il cui anchor text contiene una stringa a tua scelta.
-    * Colora gli **archi** in base al loro Status Code, selezionando quali status code personalizzare e scegliendo i colori.
-4.  **🔎 Esplora il Grafo**: Il grafo verrà visualizzato nell'area principale.
-    * Interagisci zoomando, spostandoti e ruotando (se in 3D).
-    * Passa il mouse sopra nodi e archi per visualizzare dettagli.
-5.  **📊 Analizza i Log**: Un log di pre-processing (espandibile) ti mostrerà come i filtri influenzano i dati.
-6.  **💾 Scarica il Report**: Puoi scaricare un riepilogo dei nodi del grafo generato.
+    1.  **⬆️ Carica il tuo File**: 
+        * Utilizza il pulsante "Carica il tuo file CSV dei link" nella sidebar a sinistra.
+        * Il file CSV deve contenere almeno le colonne `Source` (URL di origine del link) e `Destination` (URL di destinazione del link).
+        * **Colonne Opzionali Utili**:
+            * `Anchor`: Il testo cliccabile del link (anchor text).
+            * `Type`: Il tipo di link (es. "Hyperlink", "HTTP Redirect", "Image").
+            * `Status Code`: Il codice di stato HTTP della URL di destinazione (es. 200, 301, 404).
 
-Inizia caricando il tuo file e sperimentando con i filtri!
-""")
+    2.  **⚙️ Personalizza i Filtri (Sidebar Sinistra)**:
+        * **Dominio da Includere**: Inserisci il tuo dominio (es. `sitoesempio.com`) per focalizzare l'analisi sui link interni. Vengono considerate varianti come `www.`, `http://`, `https://`.
+        * **Valore Tipo Record**: Se il tuo CSV ha una colonna "Type", puoi filtrare per tipi specifici come "Hyperlink" o "HTTP Redirect". Seleziona "Nessuno" per non applicare questo filtro.
+        * **Filtri URL da Escludere**: 
+            * Una lista di checkbox ti permette di escludere rapidamente URL che contengono stringhe comuni (es. estensioni di file immagine come `.jpg`, file di stile come `.css`, ecc.). Deseleziona una checkbox per *includere* le URL che contengono quella stringa.
+            * Usa il campo "Altri filtri URL da escludere" per inserire stringhe personalizzate (separate da virgola) da escludere. Qualsiasi URL (sia Source che Destination) che contiene una di queste stringhe verrà rimossa.
+    3.  **🎨 Evidenziazione Personalizzata (Sidebar Sinistra)**:
+        * **URL Nodi**: Abilita e inserisci una stringa per colorare diversamente i nodi (pagine) la cui URL contiene quella stringa. Scegli il colore che preferisci.
+        * **Anchor Text Archi**: Abilita e inserisci una stringa per colorare diversamente gli archi (link) se uno dei loro anchor text contiene quella stringa.
+        * **Status Code Archi**: Abilita e definisci il nome della colonna "Status Code" nel tuo CSV. Poi, per ogni status code unico trovato nel tuo file, puoi attivare la colorazione e scegliere un colore personalizzato.
+    4.  **🚀 Applica Configurazione**: Dopo aver impostato i filtri e le opzioni di evidenziazione, clicca il pulsante "Applica Configurazione e Genera Grafo" in fondo alla sidebar.
+    5.  **🔎 Esplora il Grafo (Area Principale)**:
+        * Il grafo generato apparirà sulla destra.
+        * Puoi zoomare, spostare (pan) e ruotare (se il layout è 3D) il grafo usando il mouse.
+        * Passa il mouse sopra i nodi per vedere l'URL, il grado totale, i link entranti e uscenti.
+        * Passa il mouse sopra gli archi per vedere l'URL di origine, di destinazione, lo status code (se disponibile) e gli anchor text unici.
+    6.  **📊 Analizza i Log (Sotto il Grafo)**:
+        * Un'area espandibile "Log di Pre-processing" ti mostrerà quante righe sono state processate e rimosse da ciascun filtro, aiutandoti a capire come le tue selezioni influenzano il grafo finale.
+    7.  **💾 Scarica il Report (Sotto il Grafo)**:
+        * Un pulsante "Scarica Report Nodi (CSV)" ti permette di salvare un file CSV con un riepilogo di tutti i nodi presenti nel grafo visualizzato, inclusi i loro gradi di entrata e uscita.
+
+    Inizia caricando il tuo file e sperimentando con i filtri per ottenere gli insight che cerchi!
+    """)
 
 
 log_placeholder_container = st.empty() 
+# Inizializza lo stato della sessione per figura e log se non esistono
+if 'figura_plotly_main' not in st.session_state:
+    st.session_state.figura_plotly_main = None
+if 'log_output_main' not in st.session_state:
+    st.session_state.log_output_main = []
+
 
 with st.sidebar: 
     st.header("🛠️ Opzioni di Filtro e Controllo") 
-    uploaded_file = st.file_uploader("📤 Carica il tuo file CSV dei link", type=["csv"]) 
+    uploaded_file = st.file_uploader("📤 Carica il tuo file CSV dei link", type=["csv"], key="main_file_uploader") 
+
+    # Se un nuovo file viene caricato, resetta lo stato del grafico precedente
+    if uploaded_file is not None and st.session_state.get('last_uploaded_file_id') != uploaded_file.file_id:
+        st.session_state.figura_plotly_main = None
+        st.session_state.log_output_main = []
+        st.session_state.last_uploaded_file_id = uploaded_file.file_id
+        st.session_state.config_applied = False # Richiede di riapplicare la configurazione
+    elif uploaded_file is None and st.session_state.get('last_uploaded_file_id') is not None:
+        # File rimosso
+        st.session_state.figura_plotly_main = None
+        st.session_state.log_output_main = []
+        st.session_state.last_uploaded_file_id = None
+        st.session_state.config_applied = False
+
 
     unique_status_codes_from_file = []
-    if 'status_code_column_name_input' not in st.session_state: # Inizializza se non esiste
+    if 'status_code_column_name_input' not in st.session_state: 
         st.session_state.status_code_column_name_input = "Status Code"
 
     if uploaded_file is not None:
         try:
-            file_buffer_copy = io.BytesIO(uploaded_file.getvalue()) # Crea una copia per la lettura
-            # Leggi solo le colonne necessarie per gli status code, se possibile
-            # Per ora leggiamo tutto per semplicità, ma potrebbe essere ottimizzato
+            file_buffer_copy = io.BytesIO(uploaded_file.getvalue()) 
             temp_df_status = pd.read_csv(file_buffer_copy, dtype=str, usecols=lambda x: x in [st.session_state.status_code_column_name_input])
-            
             if st.session_state.status_code_column_name_input in temp_df_status.columns:
                 unique_status_codes_from_file = sorted(list(temp_df_status[st.session_state.status_code_column_name_input].dropna().astype(str).str.strip().unique()))
                 if not unique_status_codes_from_file:
                      st.sidebar.caption(f"Nessun valore trovato nella colonna '{st.session_state.status_code_column_name_input}'.")
             else:
                  st.sidebar.warning(f"Colonna Status Code '{st.session_state.status_code_column_name_input}' non trovata.")
-            uploaded_file.seek(0) # Importante resettare per la lettura principale
-        except pd.errors.EmptyDataError:
-            st.sidebar.warning("File CSV caricato è vuoto o malformattato.")
-        except ValueError as ve: # Errore se usecols non trova la colonna
-            st.sidebar.warning(f"Colonna '{st.session_state.status_code_column_name_input}' non presente nel CSV per gli status code.")
-        except Exception as e:
-            st.sidebar.error(f"Errore lettura status codes: {e}")
-            unique_status_codes_from_file = [] 
-
+            uploaded_file.seek(0) 
+        except pd.errors.EmptyDataError: st.sidebar.warning("File CSV caricato è vuoto o malformattato.")
+        except ValueError: st.sidebar.warning(f"Colonna '{st.session_state.status_code_column_name_input}' non presente nel CSV.")
+        except Exception as e: st.sidebar.error(f"Errore lettura status codes: {e}"); unique_status_codes_from_file = [] 
 
     default_stringhe_da_escludere = [     
         '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', 
@@ -393,13 +413,13 @@ with st.sidebar:
         'mailto:', 'tel:', '#', 'javascript:void(0)'
     ]
 
-    dominio_input = st.text_input("🔗 Dominio da Includere (es. 'sitoesempio.com')", value="sitoesempio.com") 
+    dominio_input = st.text_input("🔗 Dominio da Includere (es. 'sitoesempio.com')", value="sitoesempio.com", key="dominio_input_key") 
 
     tipo_record_opzioni = ["Nessuno", "Hyperlink", "HTTP Redirect", "HTML Canonical", "Image"] 
     tipo_record_selezionato = st.selectbox(
         "🏷️ Valore Tipo Record da Includere (opzionale, colonna 'Type')",  
         options=tipo_record_opzioni, 
-        index=1 
+        index=1, key="tipo_record_key"
     )
     valore_tipo_da_usare = None if tipo_record_selezionato == "Nessuno" else tipo_record_selezionato
 
@@ -411,7 +431,7 @@ with st.sidebar:
 
     stringhe_escluse_selezionate_ui = []
     num_columns = 3
-    cols_checkbox = st.columns(num_columns) # Rinomina per evitare conflitto
+    cols_checkbox = st.columns(num_columns) 
     for idx, s_escl in enumerate(default_stringhe_da_escludere):
         checkbox_key = f"cb_{s_escl.replace('.', '_dot_').replace('/', '_slash_').replace(':', '_colon_').replace('#','_hash_')}"
         if checkbox_key not in st.session_state.checkbox_states:
@@ -457,7 +477,6 @@ with st.sidebar:
     st.subheader("🚦 Evidenziazione Archi per Status Code")
     abilita_colorazione_status_ui = st.checkbox("Abilita colorazione archi per Status Code", value=True, key="enable_status_code_coloring")
     colonna_status_code_input = st.text_input("Nome colonna Status Code nel CSV:", value="Status Code", key="status_code_column_name_input")
-    # Salva il nome della colonna in session_state per rileggere gli status codes se il file cambia
     st.session_state.status_code_column_name_input = colonna_status_code_input 
     
     map_status_a_colore_ui = {}
@@ -474,20 +493,15 @@ with st.sidebar:
     if abilita_colorazione_status_ui:
         if uploaded_file and unique_status_codes_from_file:
             st.write("Seleziona e personalizza i colori per gli Status Code:")
-            
-            # Inizializza lo stato delle checkbox per gli status code se non esiste
             if 'status_checkbox_states' not in st.session_state:
                 st.session_state.status_checkbox_states = {}
             
-            num_status_cols = 2 # Colonne per i checkbox degli status code
+            num_status_cols = 2 
             status_cols = st.columns(num_status_cols)
             col_idx = 0
 
             for sc_val in unique_status_codes_from_file:
-                status_checkbox_key = f"cb_status_{sc_val.replace('.', '_').replace('/','_')}" # Chiave univoca
-                
-                # Inizializza lo stato per questo specifico status code se non esiste
-                # Pre-seleziona alcuni status comuni se presenti nel file
+                status_checkbox_key = f"cb_status_{sc_val.replace('.', '_').replace('/','_')}" 
                 common_codes_to_default_check = ['200', '301', '302', '404', '500', '503']
                 if status_checkbox_key not in st.session_state.status_checkbox_states:
                     st.session_state.status_checkbox_states[status_checkbox_key] = sc_val in common_codes_to_default_check
@@ -509,7 +523,7 @@ with st.sidebar:
                         elif sc_val.startswith('5'): default_color = default_colors_for_status_map['5xx']
                         else: default_color = default_colors_for_status_map['Sconosciuto']
                     
-                    with status_cols[col_idx % num_status_cols]: # Metti il color picker nella stessa colonna
+                    with status_cols[col_idx % num_status_cols]: 
                         map_status_a_colore_ui[sc_val] = st.color_picker(
                             f"Colore per '{sc_val}':", 
                             value=default_color, 
@@ -521,14 +535,18 @@ with st.sidebar:
         elif not uploaded_file:
              st.info("Carica un file CSV per personalizzare i colori per Status Code.")
 
-
     st.markdown("---")
-    st.info("ℹ️ Modifica i filtri e il grafico si aggiornerà automaticamente.") 
+    apply_button = st.button("🚀 Applica Configurazione e Genera Grafo", key="apply_config_button")
+    st.info("ℹ️ Modifica i filtri e clicca 'Applica' per aggiornare il grafico.") 
 
 
-if uploaded_file is not None:
+if 'config_applied' not in st.session_state:
+    st.session_state.config_applied = False
+
+if apply_button and uploaded_file is not None:
+    st.session_state.config_applied = True # Segna che la configurazione è stata applicata
     try:
-        uploaded_file.seek(0) # Assicura che il file sia letto dall'inizio
+        uploaded_file.seek(0) 
         df_caricato = pd.read_csv(uploaded_file, dtype=str)
         st.success(f"✔️ File '{uploaded_file.name}' caricato. ({len(df_caricato)} righe)") 
 
@@ -551,35 +569,57 @@ if uploaded_file is not None:
                 colonna_status_code_nome=colonna_status_code_input,         
                 map_status_code_a_colore=map_status_a_colore_ui                
             )
+        st.session_state.figura_plotly_main = figura_plotly
+        st.session_state.log_output_main = log_output
         
-        with log_placeholder_container.expander("📜 Log di Pre-processing", expanded=False): 
-            st.text("\n".join(log_output))
-
-        if figura_plotly:
-            st.plotly_chart(figura_plotly, use_container_width=True, height=800)
-            st.caption("🖱️ Interagisci con il grafo.") 
-            try:
-                with open("report_nodi_grafo_streamlit.csv", "rb") as fp:
-                    st.download_button(
-                        label="📥 Scarica Report Nodi (CSV)", 
-                        data=fp,
-                        file_name="report_nodi_grafo.csv", 
-                        mime="text/csv"
-                    )
-            except FileNotFoundError:
-                st.warning("⚠️ File report nodi non trovato.") 
-            except Exception as e_dl:
-                 st.warning(f"😥 Errore download report: {e_dl}") 
-        else:
-            if not log_output or "Grafo vuoto" not in "".join(log_output) and "DataFrame vuoto" not in "".join(log_output) : 
-                 st.warning("🚫 Impossibile generare il grafico. Controlla i log.") 
-
     except Exception as e:
         st.error(f"🆘 Errore critico: {e}") 
         st.exception(e) 
-else:
+        st.session_state.figura_plotly_main = None
+        st.session_state.log_output_main = [f"Errore critico: {e}"]
+
+elif uploaded_file is None:
+    st.session_state.figura_plotly_main = None
+    st.session_state.log_output_main = []
+    st.session_state.config_applied = False # Resetta se il file viene rimosso
+
+
+# Visualizza i log e il grafico basandosi sullo stato della sessione
+if st.session_state.get('log_output_main'):
+    with log_placeholder_container.expander("📜 Log di Pre-processing", expanded=st.session_state.get('config_applied', False) ): # Espandi se la config è stata appena applicata
+        st.text("\n".join(st.session_state.log_output_main))
+elif uploaded_file is not None and not st.session_state.get('config_applied', False):
+     with log_placeholder_container.container():
+        st.info("⚙️ Configura i filtri e clicca 'Applica Configurazione' nella sidebar per generare il grafo.")
+else: # Nessun file caricato
     with log_placeholder_container.container(): 
         st.info("⏳ Attendo il caricamento di un file CSV.") 
+
+
+if st.session_state.get('figura_plotly_main') is not None:
+    st.plotly_chart(st.session_state.figura_plotly_main, use_container_width=True, height=800)
+    st.caption("🖱️ Interagisci con il grafo.") 
+    try:
+        # Assicurati che il file esista prima di offrire il download
+        # Questo è più robusto se la creazione del file fallisce per qualche motivo
+        if pd.DataFrame([{'Nodo_URL': 'test'}]).to_csv("report_nodi_grafo_streamlit.csv", index=False): # Test rapido di scrittura
+             with open("report_nodi_grafo_streamlit.csv", "rb") as fp:
+                st.download_button(
+                    label="📥 Scarica Report Nodi (CSV)", 
+                    data=fp,
+                    file_name="report_nodi_grafo.csv", 
+                    mime="text/csv"
+                )
+    except FileNotFoundError:
+        st.warning("⚠️ File report nodi non trovato (potrebbe non essere stato generato).") 
+    except Exception as e_dl:
+         st.warning(f"😥 Errore download report: {e_dl}") 
+elif uploaded_file is not None and st.session_state.get('config_applied', False): # Config applicata ma nessuna figura
+    if not st.session_state.get('log_output_main') or \
+       ("Grafo vuoto" not in "".join(st.session_state.log_output_main) and \
+        "DataFrame vuoto" not in "".join(st.session_state.log_output_main)):
+        st.warning("🚫 Impossibile generare il grafico. Controlla i log per dettagli.")
+
 
 st.markdown("---") 
 st.markdown(
