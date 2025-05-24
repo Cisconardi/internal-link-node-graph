@@ -359,7 +359,6 @@ with st.expander("Come funziona questa App? 🗺️ (Clicca per espandere)", exp
 
 
 log_placeholder_container = st.empty() 
-# Inizializza lo stato della sessione per figura e log se non esistono
 if 'figura_plotly_main' not in st.session_state:
     st.session_state.figura_plotly_main = None
 if 'log_output_main' not in st.session_state:
@@ -370,38 +369,59 @@ with st.sidebar:
     st.header("🛠️ Opzioni di Filtro e Controllo") 
     uploaded_file = st.file_uploader("📤 Carica il tuo file CSV dei link", type=["csv"], key="main_file_uploader") 
 
-    # Se un nuovo file viene caricato, resetta lo stato del grafico precedente
     if uploaded_file is not None and st.session_state.get('last_uploaded_file_id') != uploaded_file.file_id:
         st.session_state.figura_plotly_main = None
         st.session_state.log_output_main = []
         st.session_state.last_uploaded_file_id = uploaded_file.file_id
-        st.session_state.config_applied = False # Richiede di riapplicare la configurazione
+        st.session_state.config_applied = False 
     elif uploaded_file is None and st.session_state.get('last_uploaded_file_id') is not None:
-        # File rimosso
         st.session_state.figura_plotly_main = None
         st.session_state.log_output_main = []
         st.session_state.last_uploaded_file_id = None
         st.session_state.config_applied = False
 
-
     unique_status_codes_from_file = []
-    if 'status_code_column_name_input' not in st.session_state: 
-        st.session_state.status_code_column_name_input = "Status Code"
+    # Inizializza status_code_column_name_input in session_state se non esiste
+    if 'status_code_column_name_input_val' not in st.session_state: 
+        st.session_state.status_code_column_name_input_val = "Status Code"
+
+
+    # Leggi il nome della colonna Status Code dall'input utente
+    colonna_status_code_input_val_widget = st.text_input(
+        "Nome colonna Status Code nel CSV:", 
+        value=st.session_state.status_code_column_name_input_val, # Usa il valore da session_state
+        key="status_code_column_name_widget_key" # Chiave per il widget
+    )
+    # Aggiorna session_state se il valore del widget cambia
+    if colonna_status_code_input_val_widget != st.session_state.status_code_column_name_input_val:
+        st.session_state.status_code_column_name_input_val = colonna_status_code_input_val_widget
+        # Forza un rerun per aggiornare unique_status_codes_from_file se il nome colonna cambia
+        # Questo è importante per popolare correttamente le checkbox degli status code.
+        if uploaded_file:
+            st.rerun()
+
 
     if uploaded_file is not None:
         try:
             file_buffer_copy = io.BytesIO(uploaded_file.getvalue()) 
-            temp_df_status = pd.read_csv(file_buffer_copy, dtype=str, usecols=lambda x: x in [st.session_state.status_code_column_name_input])
-            if st.session_state.status_code_column_name_input in temp_df_status.columns:
-                unique_status_codes_from_file = sorted(list(temp_df_status[st.session_state.status_code_column_name_input].dropna().astype(str).str.strip().unique()))
-                if not unique_status_codes_from_file:
-                     st.sidebar.caption(f"Nessun valore trovato nella colonna '{st.session_state.status_code_column_name_input}'.")
-            else:
-                 st.sidebar.warning(f"Colonna Status Code '{st.session_state.status_code_column_name_input}' non trovata.")
+            # Usa il valore da session_state che è stato aggiornato dal widget
+            current_status_col_name = st.session_state.status_code_column_name_input_val
+            
+            # Prova a leggere solo la colonna specificata. Se non esiste, il dataframe sarà vuoto o darà errore.
+            try:
+                temp_df_status = pd.read_csv(file_buffer_copy, dtype=str, usecols=[current_status_col_name])
+                if current_status_col_name in temp_df_status.columns:
+                    unique_status_codes_from_file = sorted(list(temp_df_status[current_status_col_name].dropna().astype(str).str.strip().unique()))
+                    if not unique_status_codes_from_file:
+                        st.sidebar.caption(f"Nessun valore trovato nella colonna '{current_status_col_name}'.")
+                else: # Questo caso non dovrebbe accadere con usecols, ma per sicurezza
+                    st.sidebar.warning(f"Colonna Status Code '{current_status_col_name}' non trovata.")
+            except ValueError: # Accade se la colonna specificata in usecols non esiste
+                 st.sidebar.warning(f"Colonna Status Code '{current_status_col_name}' non trovata nel file CSV.")
             uploaded_file.seek(0) 
         except pd.errors.EmptyDataError: st.sidebar.warning("File CSV caricato è vuoto o malformattato.")
-        except ValueError: st.sidebar.warning(f"Colonna '{st.session_state.status_code_column_name_input}' non presente nel CSV.")
         except Exception as e: st.sidebar.error(f"Errore lettura status codes: {e}"); unique_status_codes_from_file = [] 
+
 
     default_stringhe_da_escludere = [     
         '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', 
@@ -476,8 +496,7 @@ with st.sidebar:
     st.markdown("---")
     st.subheader("🚦 Evidenziazione Archi per Status Code")
     abilita_colorazione_status_ui = st.checkbox("Abilita colorazione archi per Status Code", value=True, key="enable_status_code_coloring")
-    colonna_status_code_input = st.text_input("Nome colonna Status Code nel CSV:", value="Status Code", key="status_code_column_name_input")
-    st.session_state.status_code_column_name_input = colonna_status_code_input 
+    # colonna_status_code_input è già definita sopra e legata a st.session_state.status_code_column_name_input_val
     
     map_status_a_colore_ui = {}
     default_colors_for_status_map = { 
@@ -493,7 +512,7 @@ with st.sidebar:
     if abilita_colorazione_status_ui:
         if uploaded_file and unique_status_codes_from_file:
             st.write("Seleziona e personalizza i colori per gli Status Code:")
-            if 'status_checkbox_states' not in st.session_state:
+            if 'status_checkbox_states' not in st.session_state: # Stato per le checkbox degli status code
                 st.session_state.status_checkbox_states = {}
             
             num_status_cols = 2 
@@ -501,8 +520,9 @@ with st.sidebar:
             col_idx = 0
 
             for sc_val in unique_status_codes_from_file:
-                status_checkbox_key = f"cb_status_{sc_val.replace('.', '_').replace('/','_')}" 
+                status_checkbox_key = f"cb_status_{sc_val.replace('.', '_').replace('/','_').replace(' ','_')}" # Chiave univoca più robusta
                 common_codes_to_default_check = ['200', '301', '302', '404', '500', '503']
+                # Inizializza lo stato per questo specifico status code se non esiste
                 if status_checkbox_key not in st.session_state.status_checkbox_states:
                     st.session_state.status_checkbox_states[status_checkbox_key] = sc_val in common_codes_to_default_check
                 
@@ -527,11 +547,11 @@ with st.sidebar:
                         map_status_a_colore_ui[sc_val] = st.color_picker(
                             f"Colore per '{sc_val}':", 
                             value=default_color, 
-                            key=f"color_picker_sc_{sc_val.replace('.', '_').replace('/','_')}"
+                            key=f"color_picker_sc_{sc_val.replace('.', '_').replace('/','_').replace(' ','_')}"
                         )
                 col_idx +=1
         elif uploaded_file and not unique_status_codes_from_file:
-            st.warning(f"Nessun Status Code univoco trovato nella colonna '{colonna_status_code_input}'.")
+            st.warning(f"Nessun Status Code univoco trovato nella colonna '{st.session_state.status_code_column_name_input_val}'.")
         elif not uploaded_file:
              st.info("Carica un file CSV per personalizzare i colori per Status Code.")
 
@@ -544,11 +564,11 @@ if 'config_applied' not in st.session_state:
     st.session_state.config_applied = False
 
 if apply_button and uploaded_file is not None:
-    st.session_state.config_applied = True # Segna che la configurazione è stata applicata
+    st.session_state.config_applied = True 
     try:
         uploaded_file.seek(0) 
         df_caricato = pd.read_csv(uploaded_file, dtype=str)
-        st.success(f"✔️ File '{uploaded_file.name}' caricato. ({len(df_caricato)} righe)") 
+        # Non mostrare st.success qui, verrà fatto dopo la generazione del grafo se tutto ok
 
         with st.spinner("⏳ Generazione del grafo..."): 
             figura_plotly, log_output = crea_grafo_link_interni_streamlit(
@@ -566,58 +586,72 @@ if apply_button and uploaded_file is not None:
                 stringa_anchor_da_evidenziare=stringa_da_cercare_anchor_ui,       
                 colore_evidenziazione_anchor_arco=colore_scelto_anchor_ui,
                 abilita_colorazione_status_arco=abilita_colorazione_status_ui, 
-                colonna_status_code_nome=colonna_status_code_input,         
+                colonna_status_code_nome=st.session_state.status_code_column_name_input_val, # Usa il valore da session_state       
                 map_status_code_a_colore=map_status_a_colore_ui                
             )
         st.session_state.figura_plotly_main = figura_plotly
         st.session_state.log_output_main = log_output
+        if figura_plotly:
+             st.success(f"✔️ File '{uploaded_file.name}' elaborato e grafo generato.")
         
     except Exception as e:
-        st.error(f"🆘 Errore critico: {e}") 
+        st.error(f"🆘 Errore critico durante l'elaborazione o generazione: {e}") 
         st.exception(e) 
         st.session_state.figura_plotly_main = None
         st.session_state.log_output_main = [f"Errore critico: {e}"]
 
-elif uploaded_file is None:
+elif uploaded_file is None and apply_button: # Se si clicca applica ma non c'è file
     st.session_state.figura_plotly_main = None
     st.session_state.log_output_main = []
-    st.session_state.config_applied = False # Resetta se il file viene rimosso
+    st.session_state.config_applied = False 
+    st.warning("⚠️ Per favore, carica prima un file CSV.")
 
 
 # Visualizza i log e il grafico basandosi sullo stato della sessione
 if st.session_state.get('log_output_main'):
-    with log_placeholder_container.expander("📜 Log di Pre-processing", expanded=st.session_state.get('config_applied', False) ): # Espandi se la config è stata appena applicata
+    with log_placeholder_container.expander("📜 Log di Pre-processing", expanded=st.session_state.get('config_applied', False) ): 
         st.text("\n".join(st.session_state.log_output_main))
 elif uploaded_file is not None and not st.session_state.get('config_applied', False):
      with log_placeholder_container.container():
-        st.info("⚙️ Configura i filtri e clicca 'Applica Configurazione' nella sidebar per generare il grafo.")
-else: # Nessun file caricato
+        st.info("⚙️ Configura i filtri e clicca 'Applica Configurazione e Genera Grafo' nella sidebar.")
+else: 
     with log_placeholder_container.container(): 
-        st.info("⏳ Attendo il caricamento di un file CSV.") 
+        st.info("⏳ Attendo il caricamento di un file CSV e l'applicazione della configurazione.") 
 
 
 if st.session_state.get('figura_plotly_main') is not None:
     st.plotly_chart(st.session_state.figura_plotly_main, use_container_width=True, height=800)
     st.caption("🖱️ Interagisci con il grafo.") 
     try:
-        # Assicurati che il file esista prima di offrire il download
-        # Questo è più robusto se la creazione del file fallisce per qualche motivo
-        if pd.DataFrame([{'Nodo_URL': 'test'}]).to_csv("report_nodi_grafo_streamlit.csv", index=False): # Test rapido di scrittura
-             with open("report_nodi_grafo_streamlit.csv", "rb") as fp:
-                st.download_button(
-                    label="📥 Scarica Report Nodi (CSV)", 
-                    data=fp,
-                    file_name="report_nodi_grafo.csv", 
-                    mime="text/csv"
-                )
+        # Verifica se il file report esiste prima di offrire il download
+        if pd.DataFrame([{'Test': 'test'}]).to_csv("report_nodi_grafo_streamlit.csv", index=False): # Test di scrittura per assicurarsi che la directory sia scrivibile
+            # Questo test non garantisce che il file corretto sia stato scritto dalla funzione principale,
+            # ma almeno verifica la capacità di scrittura.
+            # Sarebbe meglio controllare l'esistenza del file dopo la sua creazione nella funzione principale.
+            # Per ora, assumiamo che se figura_plotly esiste, il CSV è stato tentato.
+            pass # Il file viene creato nella funzione principale. Il download button lo leggerà.
+
+        with open("report_nodi_grafo_streamlit.csv", "rb") as fp: # Tenta di aprire il file
+            st.download_button(
+                label="📥 Scarica Report Nodi (CSV)", 
+                data=fp,
+                file_name="report_nodi_grafo.csv", 
+                mime="text/csv",
+                key="download_report_button"
+            )
     except FileNotFoundError:
-        st.warning("⚠️ File report nodi non trovato (potrebbe non essere stato generato).") 
+        # Questo avviso apparirà solo se il file non è stato creato affatto.
+        # Se la funzione crea_grafo_link_interni_streamlit fallisce prima dell'export CSV, 
+        # questo blocco potrebbe non essere raggiunto o il file potrebbe non esistere.
+        if st.session_state.get('config_applied', False): # Mostra solo se si è tentato di generare
+            st.warning("⚠️ File report nodi non trovato (potrebbe non essere stato generato a causa di errori precedenti).") 
     except Exception as e_dl:
          st.warning(f"😥 Errore download report: {e_dl}") 
-elif uploaded_file is not None and st.session_state.get('config_applied', False): # Config applicata ma nessuna figura
+elif uploaded_file is not None and st.session_state.get('config_applied', False): 
     if not st.session_state.get('log_output_main') or \
-       ("Grafo vuoto" not in "".join(st.session_state.log_output_main) and \
-        "DataFrame vuoto" not in "".join(st.session_state.log_output_main)):
+       ("Grafo vuoto" not in "".join(st.session_state.get('log_output_main',[])) and \
+        "DataFrame vuoto" not in "".join(st.session_state.get('log_output_main',[]))):
+        # Mostra questo solo se non ci sono già messaggi di errore specifici nei log
         st.warning("🚫 Impossibile generare il grafico. Controlla i log per dettagli.")
 
 
